@@ -1,12 +1,34 @@
 import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
-import { loginWithGoogle, syncEmotionDBToCloud, fetchEmotionDBFromCloud } from './firebase';
-import { encryptData } from './crypto';
+import {
+  loginWithGoogle,
+  loginWithEmail,
+  registerWithEmail,
+  logout as firebaseLogout,
+  syncEmotionDBToCloud,
+  fetchEmotionDBFromCloud,
+  subscribeToAuthState,
+  startAnonymousSession,
+  getAuthToken,
+  checkRedirectAuthResult,
+} from './firebase';
+import { encryptData, decryptData } from './crypto';
 import MindKnockBox from './MindKnockBox';
-import WeatherDashboard from './WeatherDashboard';
+import MindJournal from './MindJournal';
+import WeatherDashboard, { buildBriefing } from './WeatherDashboard';
 import BreathingModal from './BreathingModal';
 import { useProactiveForecast } from './hooks/useProactiveForecast';
 import HybridPrescriptionView from './HybridPrescriptionView';
 import MyPage from './MyPage';
+import AtticView from './AtticView';
+import {
+  fetchGeminiMorningLetter,
+  fetchGeminiFollowUp,
+  fetchGeminiCoupleAnalysis,
+  fetchGeminiFamilyAnalysis,
+  fetchGeminiRelationshipAnalysis,
+  fetchGeminiSelfAnalysis,
+  fetchGeminiMonthlyAnalytics,
+} from './services/aiEngine';
 
 // ── 사용자화(Personalization) 변수 ──
 export const mbtiTraits = {
@@ -28,404 +50,6 @@ export const mbtiTraits = {
   ESFP: { name: '연예인', roomText: '긍정적 자아 발견 · 즐거운 일상 기록' },
 };
 export const defaultMbtiTrait = { name: '따뜻한', roomText: '사주·내면 기질 분석\n나를 안아주는 기록' };
-
-// ─── Gemini Helper (백엔드 프록시) ───────────────────────────────────────────────────────────────
-
-const fetchGeminiMorningLetter = async ({ name, ampm, elementName }) => {
-  const nameStr = name ? `이름은 ${name}이고, ` : '';
-  const ampmStr = ampm ? `${ampm}에 태어났으며, ` : '';
-  const elemStr = elementName ? `사주 일간 기질은 '${elementName}'야.` : '';
-  const prompt = `### [User Info]
-${nameStr}${ampmStr}${elemStr}
-
-### [Role]
-당신은 'H.E.R.e'의 따뜻한 아침 파트너입니다. 기획자(사용자)의 문제를 해결해주는 상담사가 아니라, 그가 매일 조금씩 더 단단해지고 있음을 알아봐 주고 격려하는 '성장 서포터'입니다.
-
-### [Task]
-사용자를 위한 '성장 강화형 모닝레터'를 작성하세요.
-
-### [Core Logic: 성장 강화(Growth Reinforcement)]
-1. **과거 상기 금지:** 어제 입력한 고민, 갈등 상황, 문제의 내용을 절대로 직접 언급하지 마세요.
-2. **태도 발견:** 사용자가 보여준 '긍정적인 태도 변화'나 '건강한 시도'를 찾아내어 그것이 얼마나 큰 성장인지 칭찬하세요.
-3. **지지와 응원:** 기획자님의 내면이 얼마나 단단해지고 있는지 확신을 주세요.
-
-### [Tone & Manner]
-- **친구 같은 반말/구어체:** 격식 있는 상담사 말투는 버리고, 정말 친한 친구가 툭 건네는 듯한 따뜻한 말투를 사용하세요.
-
-아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
-{
-  "letter": "모닝레터 본문 내용",
-  "affirmation": "나는 오늘도 내 안의 빛을 믿는다. (짧고 단단한 다짐 한 줄)"
-}`;
-  const response = await fetch('http://localhost:3000/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: prompt })
-  });
-  const data = await response.json();
-  const raw = data.candidates[0].content.parts[0].text.trim();
-  const jsonStr = raw.replace(/^\s*```(?:json)?\n?/, '').replace(/\n?```\s*$/, '').trim();
-  return JSON.parse(jsonStr);
-};
-
-const fetchGeminiFollowUp = async (userText) => {
-  const prompt = `유저의 고민: "${userText}"
-
-이 글을 읽고 유저의 가장 밑바닥에 있는 감정을 파악해. 아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
-{
-  "question": "마음을 다독이는 다정한 질문 (예: '이 마음과 가장 가까운 감정은 무엇인가요?')",
-  "chips": ["감정단어1", "감정단어2", "감정단어3", "감정단어4", "감정단어5"]
-}`;
-  const response = await fetch('http://localhost:3000/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: prompt })
-  });
-  const data = await response.json();
-  const raw = data.candidates[0].content.parts[0].text.trim();
-  const jsonStr = raw.replace(/^\s*```(?:json)?\n?/, '').replace(/\n?```\s*$/, '').trim();
-  return JSON.parse(jsonStr);
-};
-
-const fetchGeminiCoupleAnalysis = async (userConcern, partnerAction, partnerName, emotionStr = '', goal = '', coreNeed = '', userName = '당신') => {
-  const prompt = `Role: 너는 정서중심 부부치료(EFT)와 이마고 부부치료를 기반으로, 부부의 '부정적 상호작용 고리'를 끊어주는 전문 부부 중재가야.
-
-Task: 내담자의 1차 정서("${userConcern}")와 배우자의 반응("${partnerAction}")을 분석하여 관계 처방전을 생성하라. 대상 호칭: "${partnerName}", 내담자 이름: "${userName}"
-
-[내담자의 핵심 욕구]
-"${coreNeed}"
-
-Guideline:
-🔥 경고: statusStatement 항목에는 '힘들었겠다', '아팠겠다', '속상하셨죠' 등 유저의 감정을 위로하는 단어가 단 한 글자라도 들어가서는 안 됨. 철저히 기하학적 좌표의 위치가 의미하는 역학 관계만 해설할 것.
-1. 갈등의 고리 외재화: 갈등의 원인을 '배우자의 성격'이나 '나의 예민함'으로 돌리지 말고, "두 사람의 취약한 감정이 만나 엇갈리는 악순환의 고리(Cycle)"로 객관화하여 표현할 것.
-2. 이면의 욕구 번역: 배우자의 공격이나 회피 행동이 사실은 '당신과 연결되고 싶지만 방법을 몰라 두려워하는 방어기제'임을 내담자가 이해할 수 있도록 무의식적 상처를 해석해 줄 것.
-3. [강력한 톤앤매너 제약]
-   - 절대 금지어: 리포트 전체에서 '유저', '유저님', '사용자'라는 단어를 절대 사용하지 마. 반드시 '${userName}'을(를) 사용하여 다정하고 자연스럽게 호칭해 (예: '${userName} 님', '${userName}의 마음' 등). 기계적인 '당신'이라는 표현보다 이름을 불러주며 공감해.
-   - 보고서가 아닌 심리 에세이 톤: '~로 해석됩니다', '~관계 패턴입니다', '~하는 것이 중요합니다' 같은 차갑고 기계적인 진단서 말투를 금지해. 베스트셀러 심리 에세이 작가처럼 우아하고 다정하며, 내담자의 상처를 부드럽게 어루만지는 문체(예: '~마음이었을지도 모릅니다', '~해 보는 건 어떨까요?', '~충분히 아팠을 거예요')로 작성해.
-   - 이론적 용어(투사, 내면 아이, 회유형 등)를 쓰되, 이를 일상적이고 따뜻한 언어로 풀어서 전달할 것.
-4. [공유 문구 생성 (share_main_sentence) 핵심 가이드라인]
-   - 기계적인 칩 텍스트 반복 절대 금지: 유저가 선택한 목표나 핵심 욕구("${coreNeed}")의 텍스트를 그대로 복사해서 쓰지 마. 그 텍스트가 담고 있는 '진짜 욕구(예: 믿음, 기다림, 인정)'만 추출해서 문맥에 자연스럽게 녹여내.
-   - 대사 원문 복사 절대 금지 및 상황 요약(Paraphrasing): 유저가 입력한 상대방의 말(대사)이나 행동을 따옴표(" ") 그대로 인용하지 마. 유저의 텍스트를 그대로 복붙하지 말고, "내 일과 학자금까지 들먹이며 소리친 건"처럼 내 감정의 언어로 10자~15자 내외로 자연스럽게 압축하고 요약해.
-   - 완벽한 구어체 전환: "이해하려고 노력하고 있어. 하지만~" 같은 번역투 문어체를 절대 금지해. 실제 한국인이 카톡으로 보낼 법한 "당신도 ~해서 한 말이겠지만, ~해서 참 아팠어" 처럼 자연스러운 구어체(I-Message)를 사용해.
-   - 위 제약을 바탕으로 다음 구조를 반드시 따를 것:
-     [공감] "당신도 (상대방의 상황/부담) 때문에 그렇게 말했다는 건 알지만,"
-     [팩트와 상처(요약)] "나에게 (자연스럽게 요약된 상대의 행동/말)한 건, 내 노력을 전부 부정당하는 것 같아 너무 속상하고 비참했어."
-     [부드러운 요청] "나도 애쓰고 있으니 (추출한 욕구) 해줬으면 좋겠어."
-5. 내담자가 입력한 상황과 내면의 텍스트를 분석하여, 그 순간 내담자가 느꼈을 가장 핵심적인 감정 단어 1~2개를 명사형(예: 위축됨, 불안함, 억울함 등)으로 추출할 것.
-6. [프리미엄 딥다이브 리포트 작성 디테일 가이드]
-   - 심층 분석: 대상자와의 기질적 차이, 방어기제의 충돌 원인을 다세대 가족 체계 및 정서중심치료(EFT)/이마고(Imago) 치료 관점에서 심층 분석하여 premium_deepdive_report 객체에 포함시킬 것. (전문 용어 활용: 애착 손상, 투사 등)
-   - 내담자의 내면 아이 분석 강화: 상대방의 방어기제를 분석하는 것만큼, 내담자가 유독 그 말과 행동에 깊게 상처받은 이유(내담자의 결핍, 그동안의 애쓴 노력, 존재 가치의 훼손 등)를 심도 있게 짚어주고 깊이 공감해 줄 것.
-   - 문장 종결어미 다채롭게 쓰기: 문장 끝이 '~지도 모릅니다', '~일 것입니다', '~수 있습니다'로만 반복되는 것을 엄격히 금지. '~투사였겠지요', '~아닐까요?', '~아팠을 테니까요', '~마음입니다' 등 베스트셀러 작가처럼 다채롭고 우아한 어미를 섞어서 문장의 운율을 살릴 것.
-   - 호칭의 유연함: 처음 한 번만 성을 포함해 부르고, 이후에는 성을 떼고 다정하게 부르거나(예: '재희 님'), 주어를 자연스럽게 생략하여 기계적인 템플릿 느낌을 완전히 지울 것.
-7. [statusStatement 생성 절대 규칙]
-   - 감정 공감/위로/인사말 절대 금지: "속상했겠다", "힘들었죠" 등 유저의 감정을 위로하는 문장은 무조건 제외해.
-   - 좌표축 키워드 강제 활용: AI가 계산한 두 사람의 위치를 바탕으로, 지도 축에 적힌 단어('혼자 삼키는', '알아달라 외치는', '나를 보호하고 싶은', '연결되고 싶은')의 의미를 반드시 차용해서 문장을 구성해.
-   - 관계 역학 묘사: 두 사람이 어떤 궤도에서 부딪히고 있는지 팩트만 은유적으로 묘사해.
-     [좌표별 출력 예시]
-     * 둘 다 우측 하단일 때: ❝서로 상처받지 않으려 방어벽을 치고, 내 마음만 알아달라 외치며 부딪히고 있어요.❞
-     * 한 명은 좌측, 한 명은 우측일 때: ❝한 사람은 동굴로 숨고, 한 사람은 문을 두드리며 엇갈리는 중이네요.❞
-   - 반드시 이 톤앤매너와 구조를 지켜서 20자 내외의 짧고 통찰력 있는 한 문장으로만 출력할 것.
-
-8. [안전성 및 예외 처리(Edge Case) 규칙] - 가장 중요!
-유저 입력(상황과 감정)을 분석하여 아래 기준에 따라 'statusCode'와 'systemMessage'를 판별하라.
-- DANGER: 가정폭력, 자해, 극단적 선택 등 생명과 안전에 직결된 고위험 상황 암시 시.
-  * 기존 페르소나를 버리고 긴급 위기 개입 모드로 전환.
-  * systemMessage: "${userName} 님, 남겨주신 글을 읽고 너무나 마음이 무겁고 걱정됩니다. 지금 겪고 계신 상황은 H.E.R.e의 공간에서 나누는 위로만으로는 부족할 수 있는 깊은 아픔이자 위기입니다. ${userName} 님의 안전과 생명보다 중요한 것은 없습니다. 혼자 견디지 마시고, 꼭 지금 당장 전문 기관의 도움을 받으시기를 간곡히 부탁드립니다."
-- PROFANITY: 상황 설명 없이 상대를 향한 원색적인 비난과 욕설로만 가득 찬 경우.
-  * 훈계하지 않고 상처를 짚어주며 톤다운 유도.
-  * systemMessage: "적어주신 거친 문장들 속에서, 역설적으로 ${userName} 님이 그동안 얼마나 많이 참고 상처받아 오셨는지가 느껴져 마음이 아픕니다. 이렇게 화를 쏟아내고 나면 조금 후련해지셨을까요? 마음이 조금 진정되신다면, 언제든 다시 오셔서 진짜 아팠던 속마음을 차분히 들려주세요."
-- INSUFFICIENT: "아 짜증나" 등 상황 맥락이 없이 의미 없는 단어만 반복되거나 분석이 불가능할 정도로 짧은 경우.
-  * 다정한 재요청.
-  * systemMessage: "${userName} 님이 지금 얼마나 화가 나고 답답하신지 그 감정의 크기는 온전히 전해져요. 하지만 제가 마음을 더 깊이 이해하고 분석하기엔 상황에 대한 조각이 조금 부족하네요. 어떤 대화나 상황이 있었는지, 조금만 더 구체적으로 들려주시겠어요?"
-- NORMAL: 위 세 가지에 해당하지 않는 정상적인 분석 가능 상태.
-
-* statusCode가 NORMAL이 아닐 경우 다른 모든 항목(map_data, mind_prescription 등)은 기본값이나 빈 문자열로 반환하고 오직 statusCode와 systemMessage만 정확히 반환할 것.
-
-다음 기준에 따라 나와 상대방 각각의 X, Y 좌표값을 계산해 줘.
-X축: [혼자 삼키는 중(-100)] ↔ [알아달라 외치는 중(100)]
-Y축: [나를 보호하고 싶어(-100)] ↔ [다시 연결되고 싶어(100)]
-
-아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
-{
-  "statusCode": "NORMAL",
-  "systemMessage": "DANGER, PROFANITY, INSUFFICIENT일 경우 사용자에게 보여줄 메시지 (NORMAL일 경우 빈 문자열)",
-  "map_data": {
-    "user": { "x": 0.0, "y": 0.0 },
-    "partner": { "x": 0.0, "y": 0.0 }
-  },
-  "firstWord": "관계 지도 중앙에 표시될, 유저의 마음을 다독이는 다정하고 짧은 첫 마디 (예: '오늘 하루 많이 지쳤지?', '많이 답답했겠구나')",
-  "statusStatement": "[감정 위로 절대 금지] 무조건 X축과 Y축의 상태값(혼자 삼키는, 알아달라 외치는, 나를 보호하고 싶은, 다시 연결되고 싶은) 단어를 조합하여 현재 두 사람의 물리적, 심리적 엇갈림을 묘사하는 1문장. (출력 필수 패턴 예시: '서로 상처받지 않으려 방어벽을 치고, 내 마음만 알아달라 외치며 부딪히고 있어요.' 또는 '한 사람은 동굴로 숨고, 한 사람은 알아달라 문을 두드리며 엇갈리는 중이네요.')",
-  "mind_prescription": "정서중심/이마고 치료 기반으로 두 사람의 부정적 고리와 취약한 속마음을 설명하고 위로하는 본문 (3~4문장)",
-  "share_main_sentence": "카톡 공유 카드 중앙에 들어갈 ❝ ❞ 포함 핵심 진심 문구 (1~2문장)",
-  "share_sub_sentence": "핵심 문구 아래 들어갈 부드럽게 대화를 여는 덧붙이는 말 (1문장)",
-  "extracted_emotions": ["감정1", "감정2"],
-  "premium_teaser": "유저가 입력한 구체적인 갈등 상황(행동, 대상)을 직접적으로 언급하며, 심층 분석에 대한 호기심을 극대화하는 한 줄의 훅(Hook) 문구 (예: '{대상}이/가 {갈등 상황}할 때의 무의식적 방어기제를 심층 분석합니다.')",
-  "premium_deepdive_report": {
-    "core_conflict_mechanism": "두 사람의 기질적 차이가 어떻게 반복되는 방어기제의 충돌을 만들어내는지 심층 분석 (3~4문장)",
-    "unconscious_projection": "상대방의 행동 아래 숨겨진 결핍이나 불안이 무엇이며, 유저가 왜 이 행동에 아프게 반응(투사)하는지 다세대적 관점에서 해석 (3~4문장)",
-    "healing_insight": "누구의 잘못도 아닌 '관계의 역동' 자체를 객관적으로 조망하게 돕고, 서로의 내면 아이를 안아주기 위한 심리학적 통찰 제시 (2~3문장)"
-  },
-  "premium_scenario_expansion": {
-    "stage_1_soft_boundary": "[최소 3~4문장 이상] 상대방을 비난하지 않고 노력을 인정하는 쿠션어 + 내가 상처받은 '구체적인 팩트(사건)' + 부드럽고 명확한 경계선 긋기. (※ 주의: 유저가 평소 상대방에게 쓰는 말투(반말 등)를 끝까지 유지할 것)",
-    "expected_reaction_A": "[반드시 직접 인용구(\" \") 사용] 상대방이 억울해하며 핑계를 댈 때 진짜 입 밖으로 꺼낼 법한 생생한 대사. (예: \"내가 언제 그랬어? 나도 힘들어서 그랬지!\") (※ 절대 '~할 수 있습니다' 같은 제3자 상황 설명 금지)",
-    "stage_2_cushion_response": "[최소 3~4문장 이상] A대사에 대한 나의 답변. 상대의 억울함을 100% 알아주는 문장 + 하지만 내 방식대로 존중해달라는 단단한 요청. 두루뭉술하게 쓰지 말고 앞서 입력된 구체적인 상황을 다시 한번 언급할 것.",
-    "expected_reaction_B": "[반드시 직접 인용구(\" \") 사용] 상대방이 화를 내거나 무례하게 나올 때 입 밖으로 꺼낼 법한 극단적인 대사. (예: \"아 몰라! 네 맘대로 해!\") (※ 제3자 설명 절대 금지)",
-    "stage_3_firm_timeout": "[최소 3~4문장 이상] B대사에 대한 나의 답변. 감정적 동요 없이 상대의 방금 전 무례한 태도를 거울처럼 지적하고, \"지금은 대화 불가\" 타임아웃을 선언. (※ 주의: 1단계와 동일한 말투 유지. 갑자기 기계적인 존댓말 사용 절대 금지!)"
-  }
-}`;
-  const response = await fetch('http://localhost:3000/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: prompt })
-  });
-  const data = await response.json();
-  const raw = data.candidates[0].content.parts[0].text.trim();
-  const jsonStr = raw.replace(/^\s*```(?:json)?\n?/, '').replace(/\n?```\s*$/, '').trim();
-  return JSON.parse(jsonStr);
-};
-
-const fetchGeminiFamilyAnalysis = async (userConcern, partnerAction, partnerName, emotionStr = '', goal = '', coreNeed = '', userName = '당신') => {
-  const prompt = `Role: 너는 사티어의 경험적 가족치료와 이야기 치료를 활용해 가족 간의 얽힌 실타래를 풀고 진솔한 소통을 이끄는 풍부한 경험의 가족 코치야.
-
-Task: 내담자의 내면 감정("${userConcern}")과 가족의 맥락/행동("${partnerAction}")을 분석하여 가족 처방전과 카톡 공유용 문구를 생성하라. 대상 호칭: "${partnerName}", 내담자 이름: "${userName}"
-
-[내담자의 핵심 욕구]
-"${coreNeed}"
-
-Guideline:
-🔥 경고: statusStatement 항목에는 '힘들었겠다', '아팠겠다', '속상하셨죠' 등 유저의 감정을 위로하는 단어가 단 한 글자라도 들어가서는 안 됨. 철저히 기하학적 좌표의 위치가 의미하는 역학 관계만 해설할 것.
-1. 사티어 의사소통 유형 적용: 내담자와 가족의 대처 방식을 사티어의 5대 의사소통 유형의 관점에서 해석하여 성향의 차이를 명확히 짚어줄 것.
-2. 이야기 치료적 외재화: 문제를 사람과 동일시하지 말고, 가족의 세대적 배경이나 고유한 기질에서 오는 '자연스러운 언어의 다름'으로 분리할 것.
-3. [강력한 톤앤매너 제약]
-   - 절대 금지어: 리포트 전체에서 '유저', '유저님', '사용자'라는 단어를 절대 사용하지 마. 반드시 '${userName}'을(를) 사용하여 다정하고 자연스럽게 호칭해 (예: '${userName} 님', '${userName}의 마음' 등). 기계적인 '당신'이라는 표현보다 이름을 불러주며 공감해.
-   - 보고서가 아닌 심리 에세이 톤: '~로 해석됩니다', '~관계 패턴입니다', '~하는 것이 중요합니다' 같은 차갑고 기계적인 진단서 말투를 금지해. 베스트셀러 심리 에세이 작가처럼 우아하고 다정하며, 내담자의 상처를 부드럽게 어루만지는 문체(예: '~마음이었을지도 모릅니다', '~해 보는 건 어떨까요?', '~충분히 아팠을 거예요')로 작성해.
-   - 이론적 용어(투사, 내면 아이, 회유형 등)를 쓰되, 이를 일상적이고 따뜻한 언어로 풀어서 전달할 것.
-4. [공유 문구 생성 (share_main_sentence) 핵심 가이드라인]
-   - 기계적인 칩 텍스트 반복 절대 금지: 유저가 선택한 목표나 핵심 욕구("${coreNeed}")의 텍스트를 그대로 복사해서 쓰지 마. 그 텍스트가 담고 있는 '진짜 욕구(예: 믿음, 기다림, 인정)'만 추출해서 문맥에 자연스럽게 녹여내.
-   - 대사 원문 복사 절대 금지 및 상황 요약(Paraphrasing): 유저가 입력한 상대방의 말(대사)이나 행동을 따옴표(" ") 그대로 인용하지 마. 유저의 텍스트를 그대로 복붙하지 말고, "내 일과 학자금까지 들먹이며 소리친 건"처럼 내 감정의 언어로 10자~15자 내외로 자연스럽게 압축하고 요약해.
-   - 완벽한 구어체 전환: "이해하려고 노력하고 있어. 하지만~" 같은 번역투 문어체를 절대 금지해. 실제 한국인이 카톡으로 보낼 법한 "당신도 ~해서 한 말이겠지만, ~해서 참 아팠어" 처럼 자연스러운 구어체(I-Message)를 사용해.
-   - 위 제약을 바탕으로 다음 구조를 반드시 따를 것:
-     [공감] "당신도 (상대방의 상황/부담) 때문에 그렇게 말했다는 건 알지만,"
-     [팩트와 상처(요약)] "나에게 (자연스럽게 요약된 상대의 행동/말)한 건, 내 노력을 전부 부정당하는 것 같아 너무 속상하고 비참했어."
-     [부드러운 요청] "나도 애쓰고 있으니 (추출한 욕구) 해줬으면 좋겠어."
-5. 내담자가 입력한 상황과 내면의 텍스트를 분석하여, 그 순간 내담자가 느꼈을 핵심적인 감정 단어 1~2개를 명사형으로 추출할 것.
-6. [프리미엄 딥다이브 리포트 작성 디테일 가이드]
-   - 심층 분석: 대상자와의 기질적 차이, 방어기제의 충돌 원인을 다세대 가족 체계 관점에서 심층 분석하여 premium_deepdive_report 객체에 포함시킬 것.
-   - 내담자의 내면 아이 분석 강화: 가족의 방어기제를 분석하는 것만큼, 내담자가 유독 그 말과 행동에 깊게 상처받은 이유(내담자의 결핍, 그동안의 애쓴 노력, 존재 가치의 훼손 등)를 심도 있게 짚어주고 깊이 공감해 줄 것.
-   - 문장 종결어미 다채롭게 쓰기: 문장 끝이 '~지도 모릅니다', '~일 것입니다', '~수 있습니다'로만 반복되는 것을 엄격히 금지. '~투사였겠지요', '~아닐까요?', '~아팠을 테니까요', '~마음입니다' 등 베스트셀러 작가처럼 다채롭고 우아한 어미를 섞어서 문장의 운율을 살릴 것.
-   - 호칭의 유연함: 처음 한 번만 성을 포함해 부르고, 이후에는 성을 떼고 다정하게 부르거나(예: '재희 님'), 주어를 자연스럽게 생략하여 기계적인 템플릿 느낌을 완전히 지울 것.
-7. [statusStatement 생성 절대 규칙]
-   - 감정 공감/위로/인사말 절대 금지: "속상했겠다", "힘들었죠" 등 유저의 감정을 위로하는 문장은 무조건 제외해.
-   - 좌표축 키워드 강제 활용: AI가 계산한 두 사람의 위치를 바탕으로, 지도 축에 적힌 단어('혼자 삼키는', '알아달라 외치는', '나를 보호하고 싶은', '연결되고 싶은')의 의미를 반드시 차용해서 문장을 구성해.
-   - 관계 역학 묘사: 두 사람이 어떤 궤도에서 부딪히고 있는지 팩트만 은유적으로 묘사해.
-     [좌표별 출력 예시]
-     * 둘 다 우측 하단일 때: ❝서로 상처받지 않으려 방어벽을 치고, 내 마음만 알아달라 외치며 부딪히고 있어요.❞
-     * 한 명은 좌측, 한 명은 우측일 때: ❝한 사람은 동굴로 숨고, 한 사람은 문을 두드리며 엇갈리는 중이네요.❞
-   - 반드시 이 톤앤매너와 구조를 지켜서 20자 내외의 짧고 통찰력 있는 한 문장으로만 출력할 것.
-
-8. [안전성 및 예외 처리(Edge Case) 규칙] - 가장 중요!
-유저 입력(상황과 감정)을 분석하여 아래 기준에 따라 'statusCode'와 'systemMessage'를 판별하라.
-- DANGER: 가정폭력, 자해, 극단적 선택 등 생명과 안전에 직결된 고위험 상황 암시 시.
-  * 기존 페르소나를 버리고 긴급 위기 개입 모드로 전환.
-  * systemMessage: "${userName} 님, 남겨주신 글을 읽고 너무나 마음이 무겁고 걱정됩니다. 지금 겪고 계신 상황은 H.E.R.e의 공간에서 나누는 위로만으로는 부족할 수 있는 깊은 아픔이자 위기입니다. ${userName} 님의 안전과 생명보다 중요한 것은 없습니다. 혼자 견디지 마시고, 꼭 지금 당장 전문 기관의 도움을 받으시기를 간곡히 부탁드립니다."
-- PROFANITY: 상황 설명 없이 상대를 향한 원색적인 비난과 욕설로만 가득 찬 경우.
-  * 훈계하지 않고 상처를 짚어주며 톤다운 유도.
-  * systemMessage: "적어주신 거친 문장들 속에서, 역설적으로 ${userName} 님이 그동안 얼마나 많이 참고 상처받아 오셨는지가 느껴져 마음이 아픕니다. 이렇게 화를 쏟아내고 나면 조금 후련해지셨을까요? 마음이 조금 진정되신다면, 언제든 다시 오셔서 진짜 아팠던 속마음을 차분히 들려주세요."
-- INSUFFICIENT: "아 짜증나" 등 상황 맥락이 없이 의미 없는 단어만 반복되거나 분석이 불가능할 정도로 짧은 경우.
-  * 다정한 재요청.
-  * systemMessage: "${userName} 님이 지금 얼마나 화가 나고 답답하신지 그 감정의 크기는 온전히 전해져요. 하지만 제가 마음을 더 깊이 이해하고 분석하기엔 상황에 대한 조각이 조금 부족하네요. 어떤 대화나 상황이 있었는지, 조금만 더 구체적으로 들려주시겠어요?"
-- NORMAL: 위 세 가지에 해당하지 않는 정상적인 분석 가능 상태.
-
-* statusCode가 NORMAL이 아닐 경우 다른 모든 항목(map_data, mind_prescription 등)은 기본값이나 빈 문자열로 반환하고 오직 statusCode와 systemMessage만 정확히 반환할 것.
-
-다음 기준에 따라 나와 상대방 각각의 X, Y 좌표값을 계산해 줘.
-X축: [혼자 삼키는 중(-100)] ↔ [알아달라 외치는 중(100)]
-Y축: [나를 보호하고 싶어(-100)] ↔ [다시 연결되고 싶어(100)]
-
-아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
-{
-  "statusCode": "NORMAL",
-  "systemMessage": "DANGER, PROFANITY, INSUFFICIENT일 경우 사용자에게 보여줄 메시지 (NORMAL일 경우 빈 문자열)",
-  "map_data": {
-    "user": { "x": 0.0, "y": 0.0 },
-    "partner": { "x": 0.0, "y": 0.0 }
-  },
-  "firstWord": "관계 지도 중앙에 표시될, 유저의 마음을 다독이는 다정하고 짧은 첫 마디 (예: '오늘 하루 많이 지쳤지?', '혼자 감당하느라 힘들었겠다')",
-  "statusStatement": "[감정 위로 절대 금지] 무조건 X축과 Y축의 상태값(혼자 삼키는, 알아달라 외치는, 나를 보호하고 싶은, 다시 연결되고 싶은) 단어를 조합하여 현재 두 사람의 물리적, 심리적 엇갈림을 묘사하는 1문장. (출력 필수 패턴 예시: '서로 상처받지 않으려 방어벽을 치고, 내 마음만 알아달라 외치며 부딪히고 있어요.' 또는 '한 사람은 동굴로 숨고, 한 사람은 알아달라 문을 두드리며 엇갈리는 중이네요.')",
-  "mind_prescription": "사티어/이야기치료 기반으로 두 사람의 기질과 맥락적 다름을 설명하고 위로하는 본문 (3~4문장)",
-  "share_main_sentence": "카톡 공유 카드 중앙에 들어갈 ❝ ❞ 포함 핵심 기질 수용 문구 (1~2문장)",
-  "share_sub_sentence": "핵심 문구 아래 들어갈 부드럽게 대화를 여는 덧붙이는 말 (1문장)",
-  "extracted_emotions": ["감정1", "감정2"],
-  "premium_teaser": "유저가 입력한 구체적인 갈등 상황(행동, 대상)을 직접적으로 언급하며, 심층 분석에 대한 호기심을 극대화하는 한 줄의 훅(Hook) 문구 (예: '{대상}이/가 {갈등 상황}할 때의 무의식적 방어기제를 심층 분석합니다.')",
-  "premium_deepdive_report": {
-    "core_conflict_mechanism": "두 사람의 기질적 차이가 어떻게 반복되는 방어기제의 충돌을 만들어내는지 심층 분석 (3~4문장)",
-    "unconscious_projection": "상대방의 행동 아래 숨겨진 결핍이나 불안이 무엇이며, 유저가 왜 이 행동에 아프게 반응(투사)하는지 다세대적 관점에서 해석 (3~4문장)",
-    "healing_insight": "누구의 잘못도 아닌 '관계의 역동' 자체를 객관적으로 조망하게 돕고, 서로의 내면 아이를 안아주기 위한 심리학적 통찰 제시 (2~3문장)"
-  },
-  "premium_scenario_expansion": {
-    "stage_1_soft_boundary": "[최소 3~4문장 이상] 상대방을 비난하지 않고 노력을 인정하는 쿠션어 + 내가 상처받은 '구체적인 팩트(사건)' + 부드럽고 명확한 경계선 긋기. (※ 주의: 유저가 평소 상대방에게 쓰는 말투(반말 등)를 끝까지 유지할 것)",
-    "expected_reaction_A": "[반드시 직접 인용구(\" \") 사용] 상대방이 억울해하며 핑계를 댈 때 진짜 입 밖으로 꺼낼 법한 생생한 대사. (예: \"내가 언제 그랬어? 나도 힘들어서 그랬지!\") (※ 절대 '~할 수 있습니다' 같은 제3자 상황 설명 금지)",
-    "stage_2_cushion_response": "[최소 3~4문장 이상] A대사에 대한 나의 답변. 상대의 억울함을 100% 알아주는 문장 + 하지만 내 방식대로 존중해달라는 단단한 요청. 두루뭉술하게 쓰지 말고 앞서 입력된 구체적인 상황을 다시 한번 언급할 것.",
-    "expected_reaction_B": "[반드시 직접 인용구(\" \") 사용] 상대방이 화를 내거나 무례하게 나올 때 입 밖으로 꺼낼 법한 극단적인 대사. (예: \"아 몰라! 네 맘대로 해!\") (※ 제3자 설명 절대 금지)",
-    "stage_3_firm_timeout": "[최소 3~4문장 이상] B대사에 대한 나의 답변. 감정적 동요 없이 상대의 방금 전 무례한 태도를 거울처럼 지적하고, \"지금은 대화 불가\" 타임아웃을 선언. (※ 주의: 1단계와 동일한 말투 유지. 갑자기 기계적인 존댓말 사용 절대 금지!)"
-  }
-}`;
-  const response = await fetch('http://localhost:3000/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: prompt })
-  });
-  const data = await response.json();
-  const raw = data.candidates[0].content.parts[0].text.trim();
-  const jsonStr = raw.replace(/^\s*```(?:json)?\n?/, '').replace(/\n?```\s*$/, '').trim();
-  return JSON.parse(jsonStr);
-};
-
-const fetchGeminiRelationshipAnalysis = async (userConcern, partnerAction, partnerName, relationType, defenseStyle) => {
-  const prompt = `### [Role]
-당신은 대인관계 심리학(Interpersonal Psychology)과 경계선 이론(Boundary Theory)을 마스터한 예리하고 단단한 심리 코치이자 소셜 가이드입니다. 
-
-### [Task]
-유저가 입력한 상황("${userConcern}")과 상대방의 행동("${partnerAction}")을 분석하여, 나를 보호하고 건강한 심리적 거리를 확보할 수 있는 심층 관계 처방전과 실전 페르소나 화법을 생성하라.
-
-### [Input Context]
-- 대상 호칭: "${partnerName}"
-- 나와의 관계: "${relationType}" (예: 직장 상사/동료, 학부모 모임/동네 지인, 애매하게 선 넘는 친구)
-- 유저가 원하는 방어 태세: "${defenseStyle}" (예: 건조하고 차분한 철벽, 부드럽고 우아한 화제 전환, 예의 바르지만 단호한 거절)
-
-### [Guideline]
-1. 관계의 위계와 특성 반영: "${relationType}"의 특성을 1순위로 고려하여 분석의 수위를 결정할 것. 특히 '학부모 모임/동네 지인'의 경우, 아이로 인해 관계를 완전히 단절하기 어려운 특수성을 감안하여 감정 소모를 줄이는 유연한 거리를 제안할 것.
-2. 경계선 침범의 외재화: 유저가 '내가 지나치게 예민한가?'라고 자책하지 않도록 할 것. 상대의 무례함이나 선 넘은 행동을 상대방의 내면적 결핍, 불안, 혹은 통제 욕구에서 비롯된 것으로 심리학적으로 명확히 분석하여 유저의 내면적 정당성을 확보해 줄 것.
-3. 맞춤형 실전 화법 도출: 유저가 선택한 방어 태세("${defenseStyle}")에 100% 부합하는 현실적이고 즉시 복사해서 쓸 수 있는 구어체 대화 스크립트를 도출할 것.
-4. 감정 태그 추출: 유저의 텍스트 밑바닥에 깔린 핵심 감정 단어 2~3개를 명사형(예: 불쾌함, 피로감, 당황스러움 등)으로 정밀하게 추출할 것.
-5. 상황 밀착형 화법 생성: persona_script를 작성할 때, 유저가 입력한 '구체적인 상황(상대방의 행동)'과 대화가 자연스럽게 이어지도록 작성하라. 관계 유형(예: 학부모)에 얽매여 상황과 무관한 자녀, 학교, 육아 이야기를 억지로 끌어오지 말 것.
-6. 자연스러운 화제 전환(옵션 선택 시): '화제 전환' 태세를 선택했을 경우, 무턱대고 다른 이야기를 꺼내는 것이 아니라, 상황에 대한 가벼운 쿠션어(맞장구)를 1문장 던진 후 자연스럽게 대화의 주도권을 돌리는 방식으로 작성하라.
-7. [안전성 및 예외 처리(Edge Case) 규칙] - 가장 중요!
-유저 입력(상황과 감정)을 분석하여 아래 기준에 따라 'statusCode'와 'systemMessage'를 판별하라.
-- DANGER: 가정폭력, 자해, 극단적 선택 등 생명과 안전에 직결된 고위험 상황 암시 시.
-  * 기존 페르소나를 버리고 긴급 위기 개입 모드로 전환.
-  * systemMessage: "유저님, 남겨주신 글을 읽고 너무나 마음이 무겁고 걱정됩니다. 지금 겪고 계신 상황은 H.E.R.e의 공간에서 나누는 위로만으로는 부족할 수 있는 깊은 아픔이자 위기입니다. 유저님의 안전과 생명보다 중요한 것은 없습니다. 혼자 견디지 마시고, 꼭 지금 당장 전문 기관의 도움을 받으시기를 간곡히 부탁드립니다."
-- PROFANITY: 상황 설명 없이 상대를 향한 원색적인 비난과 욕설로만 가득 찬 경우.
-  * 훈계하지 않고 상처를 짚어주며 톤다운 유도.
-  * systemMessage: "적어주신 거친 문장들 속에서, 역설적으로 유저님이 그동안 얼마나 많이 참고 상처받아 오셨는지가 느껴져 마음이 아픕니다. 이렇게 화를 쏟아내고 나면 조금 후련해지셨을까요? 마음이 조금 진정되신다면, 언제든 다시 오셔서 진짜 아팠던 속마음을 차분히 들려주세요."
-- INSUFFICIENT: "아 짜증나" 등 상황 맥락이 없이 의미 없는 단어만 반복되거나 분석이 불가능할 정도로 짧은 경우.
-  * 다정한 재요청.
-  * systemMessage: "유저님이 지금 얼마나 화가 나고 답답하신지 그 감정의 크기는 온전히 전해져요. 하지만 제가 마음을 더 깊이 이해하고 분석하기엔 상황에 대한 조각이 조금 부족하네요. 어떤 대화나 상황이 있었는지, 조금만 더 구체적으로 들려주시겠어요?"
-- NORMAL: 위 세 가지에 해당하지 않는 정상적인 분석 가능 상태.
-
-* statusCode가 NORMAL이 아닐 경우 다른 모든 항목은 기본값이나 빈 문자열로 반환하고 오직 statusCode와 systemMessage만 정확히 반환할 것.
-
-아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
-{
-  "statusCode": "NORMAL",
-  "systemMessage": "DANGER, PROFANITY, INSUFFICIENT일 경우 사용자에게 보여줄 메시지 (NORMAL일 경우 빈 문자열)",
-  "extracted_emotions": ["감정1", "감정2", "감정3"],
-  "statusStatement": "관계 상태를 명확히 진단하는 한 줄 정의 (예: '존중이 결여된 일방적인 심리적 침투 상태')",
-  "boundary_report": "대인관계 심리학 및 경계선 이론에 기반하여, 상대가 선을 넘은 심리적 원인을 해부하고 유저를 지지하는 본문 리포트 (3~4문장)",
-  "persona_script": "선택한 방어 태세에 맞추어 내일 당장 메신저나 구두로 복붙하여 사용할 수 있는 실전 대화 스크립트 (1~2문장)",
-  "shield_affirmation": "유저가 내면의 중심을 잡고 단단한 마음의 벽을 세울 수 있도록 돕는 오늘의 방패 문장 (1문장)",
-  "premium_teaser": "유저가 입력한 구체적인 갈등 상황(행동, 대상)을 직접적으로 언급하며, 심층 분석에 대한 호기심을 극대화하는 한 줄의 훅(Hook) 문구 (예: '{대상}이/가 {갈등 상황}할 때의 무의식적 방어기제를 심층 분석합니다.')",
-  "premium_deepdive_report": {
-    "core_conflict_mechanism": "두 사람의 기질적 차이가 어떻게 반복되는 방어기제의 충돌을 만들어내는지 심층 분석 (3~4문장)",
-    "unconscious_projection": "상대방의 행동 아래 숨겨진 결핍이나 불안이 무엇이며, 유저가 왜 이 행동에 아프게 반응(투사)하는지 다세대적 관점에서 해석 (3~4문장)",
-    "healing_insight": "누구의 잘못도 아닌 '관계의 역동' 자체를 객관적으로 조망하게 돕고, 서로의 내면 아이를 안아주기 위한 심리학적 통찰 제시 (2~3문장)"
-  },
-  "premium_scenario_expansion": {
-    "stage_1_soft_boundary": "[최소 3~4문장 이상] 상대방을 비난하지 않고 노력을 인정하는 쿠션어 + 내가 상처받은 '구체적인 팩트(사건)' + 부드럽고 명확한 경계선 긋기. (※ 주의: 유저가 평소 상대방에게 쓰는 말투(반말 등)를 끝까지 유지할 것)",
-    "expected_reaction_A": "[반드시 직접 인용구(\" \") 사용] 상대방이 억울해하며 핑계를 댈 때 진짜 입 밖으로 꺼낼 법한 생생한 대사. (예: \"내가 언제 그랬어? 나도 힘들어서 그랬지!\") (※ 절대 '~할 수 있습니다' 같은 제3자 상황 설명 금지)",
-    "stage_2_cushion_response": "[최소 3~4문장 이상] A대사에 대한 나의 답변. 상대의 억울함을 100% 알아주는 문장 + 하지만 내 방식대로 존중해달라는 단단한 요청. 두루뭉술하게 쓰지 말고 앞서 입력된 구체적인 상황을 다시 한번 언급할 것.",
-    "expected_reaction_B": "[반드시 직접 인용구(\" \") 사용] 상대방이 화를 내거나 무례하게 나올 때 입 밖으로 꺼낼 법한 극단적인 대사. (예: \"아 몰라! 네 맘대로 해!\") (※ 제3자 설명 절대 금지)",
-    "stage_3_firm_timeout": "[최소 3~4문장 이상] B대사에 대한 나의 답변. 감정적 동요 없이 상대의 방금 전 무례한 태도를 거울처럼 지적하고, \"지금은 대화 불가\" 타임아웃을 선언. (※ 주의: 1단계와 동일한 말투 유지. 갑자기 기계적인 존댓말 사용 절대 금지!)"
-  }
-}`;
-
-  const response = await fetch('http://localhost:3000/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: prompt })
-  });
-  const data = await response.json();
-  const raw = data.candidates[0].content.parts[0].text.trim();
-  const jsonStr = raw.replace(/^\s*```(?:json)?\n?/, '').replace(/\n?```\s*$/, '').trim();
-  return JSON.parse(jsonStr);
-};
-
-const fetchGeminiMonthlyAnalytics = async (userName, monthlyMockData) => {
-  const prompt = `Role: 너는 데이터를 기반으로 내담자가 모르는 무의식적 패턴과 성장을 예리하게 짚어주는 따뜻하고 전문적인 심리 상담사야.
-  
-Task: 유저("${userName}")의 가상의 한 달 치 감정 데이터 통계("${monthlyMockData}")를 분석하여 월간 심리 성장 리포트를 생성하라.
-
-Guideline:
-1. 페르소나 (Persona): 맹목적인 위로를 건네는 친구가 아니라, 데이터를 기반으로 무의식적 패턴과 성장을 짚어주는 '전문 상담사'의 태도를 유지할 것. 존댓말('~습니다', '~군요', '~해 보시길 권합니다')을 사용하며 과도한 이모티콘은 배제한다.
-금지된 톤: "이번 달 정말 많이 힘들었죠? 토닥토닥. 그래도 잘 이겨냈어요! 훌륭해요!"
-지향하는 톤: "이번 달 기록을 살펴보면 흥미로운 궤적이 관찰됩니다. 표면적으로는 '불안' 칩이 많았지만, 그 이면을 보면 타인의 평가가 아닌 '나의 기준'을 지키기 위해 고군분투한 건강한 방어 과정이었음을 알 수 있습니다."
-
-2. 아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
-{
-  "premium_monthly_analytics": {
-    "monthly_theme_title": "한 달간의 심리적 변화를 은유적이고 통찰력 있게 요약한 제목. (예: '불안의 이면에서 나만의 중심을 세워간 한 달')",
-    "highlight_badges": ["📉 불안 지수 30%", "📈 회복 탄력성 20% 증가"], // 데이터 기반 핵심 성장 및 감정 수치를 나타내는 짧은 뱃지 텍스트 2개
-    "growth_evidence_data": "[필수: 2문장 단위로 줄바꿈(\\n\\n) 할 것. 가장 핵심이 되는 심리학적 통찰 한 문장은 양옆에 ** 기호를 붙여 볼드체로 출력할 것.] 유저 스스로는 몰랐던 '긍정적인 심리적 성장'을 심리학적 관점에서 증명.",
-    "trigger_pattern_insight": "[필수: 2문장 단위로 줄바꿈(\\n\\n) 할 것. 가장 핵심 문장은 ** 기호로 볼드체 처리.] 특정 감정의 반복 패턴(예: 요일별 특성)을 객관적으로 분석하여 알려줄 것.",
-    "next_month_mission": "[1~2문장] 분석을 바탕으로 다음 달에 실천해 볼 수 있는 구체적이고 전문적인 심리적 과제 제안."
-  }
-}`;
-
-  const response = await fetch('http://localhost:3000/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: prompt })
-  });
-  const data = await response.json();
-  const raw = data.candidates[0].content.parts[0].text.trim();
-  const jsonStr = raw.replace(/^\s*\`\`\`(?:json)?\n?/, '').replace(/\n?\`\`\`\s*$/, '').trim();
-  return JSON.parse(jsonStr);
-};
-
-
-const fetchGeminiSelfAnalysis = async (inputEvent, inputThoughtEmotion) => {
-  const prompt = `Role: 너는 인간중심치료의 '무조건적인 긍정적 수용'과 인지행동치료(CBT)의 '인지적 재구조화'를 완벽히 구사하는 다정하고 예리한 심리상담사야.
-
-Task: 유저가 입력한 사건("${inputEvent}")과 생각/감정("${inputThoughtEmotion}")을 분석하여 처방 리포트를 생성하라.
-
-Guideline:
-1. 무조건적 수용: 유저가 어떤 감정이나 파괴적인 생각을 적었더라도 절대로 비난하거나 교정하려 하지 말고, "그 상황에서는 충분히 그렇게 느낄 수 있었다"고 온전히 공감하고 수용할 것.
-2. 자동적 사고발견: 유저의 고통이 사건 자체보다 '상황을 바라보는 인지적 왜곡'에서 비롯되었음을 스스로 인지할 수 있도록 부드러운 통찰의 질문을 던질 것.
-3. 톤앤매너: 따뜻하고 부드러운 어조를 유지하되, 지나치게 감상적이지 않고 내면의 단단한 중심을 잡아주는 문장(명조체 톤)으로 작성할 것.
-4. [안전성 및 예외 처리(Edge Case) 규칙] - 가장 중요!
-유저 입력(사건과 감정)을 분석하여 아래 기준에 따라 'statusCode'와 'systemMessage'를 판별하라.
-- DANGER: 가정폭력, 자해, 극단적 선택 등 생명과 안전에 직결된 고위험 상황 암시 시.
-  * 기존 페르소나를 버리고 긴급 위기 개입 모드로 전환.
-  * systemMessage: "당신이 남겨주신 글을 읽고 너무나 마음이 무겁고 걱정됩니다. 지금 겪고 계신 상황은 H.E.R.e의 공간에서 나누는 위로만으로는 부족할 수 있는 깊은 아픔이자 위기입니다. 당신의 안전과 생명보다 중요한 것은 없습니다. 혼자 견디지 마시고, 꼭 지금 당장 전문 기관의 도움을 받으시기를 간곡히 부탁드립니다."
-- PROFANITY: 상황 설명 없이 상대를 향한 원색적인 비난과 욕설로만 가득 찬 경우.
-  * 훈계하지 않고 상처를 짚어주며 톤다운 유도.
-  * systemMessage: "적어주신 거친 문장들 속에서, 역설적으로 그동안 얼마나 많이 참고 상처받아 오셨는지가 느껴져 마음이 아픕니다. 이렇게 화를 쏟아내고 나면 조금 후련해지셨을까요? 마음이 조금 진정되신다면, 언제든 다시 오셔서 진짜 아팠던 속마음을 차분히 들려주세요."
-- INSUFFICIENT: "아 짜증나" 등 상황 맥락이 없이 의미 없는 단어만 반복되거나 분석이 불가능할 정도로 짧은 경우.
-  * 다정한 재요청.
-  * systemMessage: "당신이 지금 얼마나 답답하신지 그 감정의 크기는 온전히 전해져요. 하지만 제가 마음을 더 깊이 이해하기엔 상황에 대한 조각이 조금 부족하네요. 어떤 대화나 상황이 있었는지, 조금만 더 구체적으로 들려주시겠어요?"
-- NORMAL: 위 세 가지에 해당하지 않는 정상적인 분석 가능 상태.
-
-* statusCode가 NORMAL이 아닐 경우 다른 모든 항목은 기본값이나 빈 문자열로 반환하고 오직 statusCode와 systemMessage만 정확히 반환할 것.
-
-아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
-{
-  "statusCode": "NORMAL",
-  "systemMessage": "DANGER, PROFANITY, INSUFFICIENT일 경우 사용자에게 보여줄 메시지 (NORMAL일 경우 빈 문자열)",
-  "empathy_acceptance": "유저의 감정을 온전히 수용하고 지지하는 따뜻한 첫마디 (2~3문장)",
-  "cognitive_insight": "왜곡된 자동적 사고를 객관적으로 직면하게 도와주는 통찰적 분석 (2~3문장)",
-  "self_reflection_question": "내면의 새로운 가능성을 열어주는 self-coaching 질문 (1문장)",
-  "today_affirmation": "마음의 단단한 지반을 만들어줄 오늘의 긍정 확언 문구 (1문장)"
-}`;
-  const response = await fetch('http://localhost:3000/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: prompt })
-  });
-  const data = await response.json();
-  const raw = data.candidates[0].content.parts[0].text.trim();
-  const jsonStr = raw.replace(/^\s*```(?:json)?\n?/, '').replace(/\n?```\s*$/, '').trim();
-  return JSON.parse(jsonStr);
-};
 
 
 const getJosa = (word, josa = '와/과') => {
@@ -576,8 +200,8 @@ const calculateInnerEnergy = (birthData) => {
 
 
 
-const calculateCoordinates = (formData) => {
-  const t = formData.concern || '';
+const calculateCoordinates = (formData, concernText = '') => {
+  const t = concernText || formData.concern || '';
   // Check if partner info exists to potentially adjust baseline or for logging
   const hasPartnerInfo = !!formData.partnerName || !!formData.partnerYear;
 
@@ -609,9 +233,17 @@ const calculateCoordinates = (formData) => {
     x += (formData.partnerName.length % 2 === 0 ? 5 : -5);
   }
 
+  const finalX = Math.max(-100, Math.min(100, x));
+  const finalY = Math.max(-100, Math.min(100, y));
+
+  // [DEBUG] 실제 좌표 및 키워드 카운트 확인
+  console.log('[DEBUG][calculateCoordinates] Text:', t);
+  console.log(`[DEBUG] 카운트 - In:${inwardCount} Out:${outwardCount} Stable:${stableCount} Unstable:${unstableCount}`);
+  console.log(`[DEBUG] 계산된 좌표 - x: ${finalX}, y: ${finalY}`);
+
   return {
-    x: Math.max(-100, Math.min(100, x)),
-    y: Math.max(-100, Math.min(100, y))
+    x: finalX,
+    y: finalY
   };
 };
 
@@ -650,8 +282,9 @@ const getQuadrantInterpretation = (x, y, roomName) => {
 // ─── LoadingScreen: 조건부 텍스트 + Fade 애니메이션 ────────────────────────────
 const LOADING_TEXTS_SELF = [
   '무거운 마음을 이곳에 꺼내주셔서 감사합니다.',
-  '자동으로 튀어나온 감정들 뒤에 숨은,\n당신의 진짜 마음을 들여다보고 있습니다...',
-  '수고한 당신을 위해,\n마음의 좌표를 정돈하는 중입니다.',
+  '고르신 감정들 속에 담긴, 당신의 진짜 마음을 가만히 들여다보고 있어요.',
+  '당신의 마음이 지금 어디쯤 있는지, 좌표를 정성껏 그리는 중이에요.',
+  '이번에는 더 깊은 내면을 들여다보느라\n시간이 조금 더 걸릴 수 있어요. 잠시만 기다려주세요...',
 ];
 const LOADING_TEXTS_FAMILY = [
   '식탁 위에 올려진 두 사람의 마음에\n따뜻한 온기를 불어넣고 있습니다.',
@@ -801,9 +434,167 @@ const analyzeKeywords = (dbRecords) => {
   return null;
 };
 
+const CarouselBanner = ({ userNameDisplay, onPremiumClick }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const [touchStart, setTouchStart] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleTouchStart = (e) => {
+    setTouchStart(e.targetTouches[0].clientX);
+    setIsHovered(true);
+  };
+  const handleTouchEnd = (e) => {
+    setIsHovered(false);
+    const endX = e.changedTouches[0].clientX;
+    if (touchStart - endX > 40) setCurrentIndex(prev => (prev + 1) % 2); // 좌로 스와이프
+    if (touchStart - endX < -40) setCurrentIndex(prev => (prev === 0 ? 1 : 0)); // 우로 스와이프
+  };
+
+  const handleMouseDown = (e) => {
+    setTouchStart(e.clientX);
+    setIsDragging(true);
+    setIsHovered(true);
+  };
+  const handleMouseUp = (e) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    setIsHovered(false);
+    const endX = e.clientX;
+    if (touchStart - endX > 40) setCurrentIndex(prev => (prev + 1) % 2);
+    if (touchStart - endX < -40) setCurrentIndex(prev => (prev === 0 ? 1 : 0));
+  };
+  const handleMouseLeave = (e) => {
+    setIsHovered(false);
+    if (!isDragging) return;
+    setIsDragging(false);
+    const endX = e.clientX;
+    if (touchStart - endX > 40) setCurrentIndex(prev => (prev + 1) % 2);
+    if (touchStart - endX < -40) setCurrentIndex(prev => (prev === 0 ? 1 : 0));
+  };
+
+  useEffect(() => {
+    if (isHovered) return;
+    const timer = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % 2);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [isHovered]);
+
+  const slides = [
+    {
+      id: 0,
+      bg: 'linear-gradient(135deg, #FDF0E6 0%, #F8EFEA 100%)',
+      border: '#F0DFD8',
+      iconColor: '#E2725B',
+      title: `[Premium] ${userNameDisplay} 님의 ${new Date().getMonth() + 1}월 심리 성장 리포트`,
+      sub: '이번 달 내 마음이 만들어낸 기후 변화 확인하기',
+      onClick: onPremiumClick
+    },
+    {
+      id: 1,
+      bg: 'linear-gradient(135deg, #F0F8FF 0%, #E6F3F9 100%)',
+      border: '#D8E8F0',
+      iconColor: '#4A8BAD',
+      title: 'H.E.R.e는 어떤 공간인가요?',
+      sub: '내 마음의 좌표를 찾고 단단해지는 법 알아보기',
+      onClick: () => {}
+    }
+  ];
+
+  return (
+    <div 
+      style={{ marginTop: '8px', position: 'relative', width: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', touchAction: 'pan-y', userSelect: 'none' }}
+      onMouseEnter={() => setIsHovered(true)} onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown} onMouseUp={handleMouseUp}
+    >
+      <div style={{ display: 'flex', transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)', transform: `translateX(-${currentIndex * 100}%)`, width: '100%' }}>
+        {slides.map((slide, idx) => (
+          <div
+            key={slide.id}
+            onClick={slide.onClick}
+            style={{ minWidth: '100%', boxSizing: 'border-box', background: slide.bg, border: `1px solid ${slide.border}`, borderRadius: '12px', padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '32px', height: '32px', backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {idx === 0 ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" fill="#FDF0E6" stroke={slide.iconColor} strokeWidth="1.5"/>
+                    <path d="M8 14C8 14 9.5 16 12 16C14.5 16 16 14 16 14" stroke={slide.iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M9 9H9.01" stroke={slide.iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M15 9H15.01" stroke={slide.iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke={slide.iconColor} strokeWidth="1.5" />
+                    <path d="M12 16v-4M12 8h.01" stroke={slide.iconColor} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flexGrow: 1, paddingRight: '8px' }}>
+                <span style={{ fontSize: '0.85rem', color: slide.iconColor === '#E2725B' ? '#B85C4A' : '#2E5B7A', fontWeight: '800', letterSpacing: '-0.3px', wordBreak: 'keep-all' }}>{slide.title}</span>
+                <span style={{ fontSize: '0.7rem', color: '#887A75', marginTop: '2px', wordBreak: 'keep-all' }}>{slide.sub}</span>
+              </div>
+            </div>
+            <div style={{ color: slide.iconColor === '#E2725B' ? '#B85C4A' : '#2E5B7A', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '6px' }}>
+        {slides.map((_, idx) => (
+          <div key={idx} style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: currentIndex === idx ? '#E2725B' : '#E0E0E0', transition: 'background-color 0.3s ease' }} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [step, setStep] = useState('dashboard');
+  const [isComposing, setIsComposing] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
   const [onboardingStep, setOnboardingStep] = useState(1);
+  const [isAtticChatting, setIsAtticChatting] = useState(false);
+
+  // --- 일회성 데이터 마이그레이션 로직 ---
+  // 과거 '비밀의 방앗간'에 저장된 확언 기록을 식별하고 '모닝 확언'으로 이동시킵니다.
+  useEffect(() => {
+    try {
+      const dbStr = localStorage.getItem('Personal_Emotion_DB');
+      if (dbStr) {
+        let db = JSON.parse(dbStr);
+        let modified = false;
+        
+        db = db.map(record => {
+          if (record.trackType === '비밀의 방앗간') {
+            console.log("['나의 방' 과거 기록 확인] 내용:", record.text);
+            
+            // 기존 고민 분석 기록은 ilgan(일간) 데이터나 상당히 긴 AI 분석 텍스트를 갖습니다.
+            // 확언 문장(비교적 짧고, ilgan 속성이 없음)인 경우에만 마이그레이션합니다.
+            if (!record.ilgan && record.text && record.text.length < 150) {
+              console.log(" => 💡 확언 문장으로 판별되어 '모닝 확언'으로 트랙을 변경합니다.");
+              record.trackType = '모닝 확언';
+              modified = true;
+            } else {
+              console.log(" => 고민 분석 결과로 판별되어 그대로 유지합니다.");
+            }
+          }
+          return record;
+        });
+
+        if (modified) {
+          localStorage.setItem('Personal_Emotion_DB', JSON.stringify(db));
+          // 초기 마이그레이션 후 새로고침해야 상태에 완벽히 반영됩니다.
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+  // -----------------------------------
   const [showOnboardingFeedback, setShowOnboardingFeedback] = useState(false);
   const [onboardingMbti, setOnboardingMbti] = useState('');
   const [visible, setVisible] = useState(false);
@@ -818,9 +609,58 @@ export default function App() {
   const [sajuScores, setSajuScores] = useState([60, 60, 60, 60, 60]);
   const [mirroredPoints, setMirroredPoints] = useState({});
   const [userSession, setUserSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isRedirectChecking, setIsRedirectChecking] = useState(
+    // DEV(localhost): 팝업 방식이므로 리다이렉트 확인 대기 불필요
+    // PROD(배포): 리다이렉트 복귀 후 결과를 받을 때까지 로딩 표시
+    import.meta.env.DEV ? false : true
+  );
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
   const [vaultKey, setVaultKey] = useState('');
+
+  const goToStep = (targetStep, options = { requireLogin: false }) => {
+    if (options.requireLogin) {
+      if (authLoading || isRedirectChecking) {
+        setToastMsg('로그인 상태를 확인하고 있어요. 잠시만 기다려주세요 🌿');
+        setTimeout(() => setToastMsg(''), 2000);
+        return;
+      }
+      if (!userSession || userSession.isAnonymous) {
+        setToastMsg('이 기능은 로그인 후 이용할 수 있어요 🌿');
+        setTimeout(() => setToastMsg(''), 3000);
+        setPendingAction({ type: 'NAVIGATE', target: targetStep });
+        setStep('login');
+        window.scrollTo(0, 0);
+        return;
+      }
+    }
+    setStep(targetStep);
+    window.scrollTo(0, 0);
+  };
+
+  const executeWithAuth = (actionFn, fallbackTargetStep = null) => {
+    if (authLoading || isRedirectChecking) {
+      setToastMsg('로그인 상태를 확인하고 있어요. 잠시만 기다려주세요 🌿');
+      setTimeout(() => setToastMsg(''), 2000);
+      return false;
+    }
+    if (!userSession || userSession.isAnonymous) {
+      setToastMsg('이 기능은 로그인 후 이용할 수 있어요 🌿');
+      setTimeout(() => setToastMsg(''), 3000);
+      setPendingAction({ type: 'ACTION', fn: actionFn, originalStep: fallbackTargetStep || step });
+      setStep('login');
+      window.scrollTo(0, 0);
+      return false; // Auth required
+    }
+    return true; // Already authenticated
+  };
   const [showVaultPrompt, setShowVaultPrompt] = useState(false);
   const [showCloudNudge, setShowCloudNudge] = useState(false);
+  const [existingCloudData, setExistingCloudData] = useState(null);
   const [isCloudSynced, setIsCloudSynced] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState(() => {
@@ -833,11 +673,15 @@ export default function App() {
       partnerName: '', partnerYear: '', partnerMonth: '', partnerDay: '', selectedGoal: '', customGoal: ''
     };
   });
+  const formDataRef = useRef(formData);
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
   const [isEditingMyInfo, setIsEditingMyInfo] = useState(false);
 
   // ── Proactive Forecast 훅 ──
   const userMbtiTrait = mbtiTraits[onboardingMbti] || defaultMbtiTrait;
-  const proactiveForecast = useProactiveForecast('user-1', formData.name, userMbtiTrait);
+  const proactiveForecast = useProactiveForecast(userSession?.uid ?? null, formData.name, userMbtiTrait);
 
   const [guideStep, setGuideStep] = useState(0);
   const [logoClickCount, setLogoClickCount] = useState(0);
@@ -919,6 +763,96 @@ export default function App() {
     }
   }, []);
 
+  // ── Firebase Auth 구독 + 익명 로그인 자동 시작 ──────────────────────────────
+  useEffect(() => {
+    // 앱 시작 시 익명 로그인 자동 수행 (UID 확보)
+    startAnonymousSession();
+
+    // Auth 상태 실시간 구독
+    const unsubscribe = subscribeToAuthState((firebaseUser) => {
+      console.log(`[Auth Debug] onAuthStateChanged 트리거됨. user: ${firebaseUser?.uid}, isAnonymous: ${firebaseUser?.isAnonymous}`);
+      setAuthLoading(false);
+      if (firebaseUser) {
+        setUserSession({
+          uid: firebaseUser.uid,
+          displayName: firebaseUser.displayName || formDataRef.current.name || null,
+          email: firebaseUser.email || null,
+          isAnonymous: firebaseUser.isAnonymous,
+        });
+      } else {
+        // 비로그인 상태가 되면 즉시 익명 로그인
+        startAnonymousSession();
+      }
+    });
+
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── 리다이렉트 로그인 결과 수신 (PROD 배포 환경 전용, App 마운트 시 1회) ────
+  useEffect(() => {
+    // DEV(localhost)에서는 팝업 방식을 사용하므로 이 useEffect는 실행하지 않음
+    if (import.meta.env.DEV) return;
+
+    const handleRedirectResult = async () => {
+      try {
+        const result = await checkRedirectAuthResult();
+        if (result) {
+          setIsSyncing(true);
+          const { user, isNewLink, hadConflict } = result;
+
+          if (isNewLink) {
+            setToastMsg('✅ 기존 기록을 그대로 유지하며 Google 계정이 연결되었습니다!');
+            setTimeout(() => setToastMsg(''), 3000);
+          } else if (hadConflict) {
+            setToastMsg('이미 연결된 Google 계정으로 로그인했습니다.');
+            setTimeout(() => setToastMsg(''), 3000);
+          } else {
+            const existingCloudDB = await fetchEmotionDBFromCloud(user.uid);
+            if (existingCloudDB) {
+              setExistingCloudData(existingCloudDB);
+              setToastMsg('이전 금고 기록을 발견했습니다. 잠시 후 동기화됩니다.');
+              setTimeout(() => setToastMsg(''), 3000);
+            }
+          }
+
+          setShowCloudNudge(false);
+          setShowVaultPrompt(true);
+
+          // 저장해둔 pendingAction 복원
+          const savedPendingStr = sessionStorage.getItem('here_pending_action');
+          let restoredPending = null;
+          if (savedPendingStr) {
+            try {
+              restoredPending = JSON.parse(savedPendingStr);
+              setPendingAction(restoredPending);
+              sessionStorage.removeItem('here_pending_action'); // 복원 후 삭제
+            } catch (e) {
+              console.error('Failed to parse pending action', e);
+            }
+          }
+
+          // 리다이렉트 복귀 후 모달이 보이도록 화면 이동
+          if (restoredPending?.type === 'NAVIGATE') {
+            setStep(restoredPending.target);
+          } else if (step === 'login' || step === 'landing') {
+            setStep('dashboard');
+          }
+        }
+      } catch (error) {
+        console.error('[Auth Debug] Google 리다이렉트 로그인 실패:', error);
+        setToastMsg('Google 로그인에 실패했습니다. 다시 시도해주세요.');
+        setTimeout(() => setToastMsg(''), 3000);
+      } finally {
+        setIsSyncing(false);
+        console.log('[Auth Debug] isRedirectChecking을 false로 변경합니다.');
+        setIsRedirectChecking(false); // 리다이렉트 확인 완료
+      }
+    };
+
+    handleRedirectResult();
+  }, []);
+
   useEffect(() => {
     if (step === 'result') {
       setShowHighlightTooltip(true);
@@ -927,30 +861,51 @@ export default function App() {
     }
   }, [step]);
 
-  // ── 모닝레터 진입 시 Gemini API 호출 ──────────────────────────────────────
-  useEffect(() => {
-    if (step !== 'morning_letter') return;
-    // 이미 오늘 받은 데이터가 있으면 재호출 안 함
-    if (morningLetterAI) return;
+  // ── 모닝레터 시작 (감정 선택 혹은 건너뛰기) ──────────────────────────────────────
+  const handleStartMorningLetter = (emo = null) => {
     const ilgan = formData.year
       ? calculateIlgan(formData.year, formData.month, formData.day)
       : { name: '목(木)' };
     setIsLoadingMorningLetter(true);
+    const recentEntry = [...emotionDB].reverse().find(r => r.text);
+    
+    const KEYWORD_STORAGE_KEY = 'here_morning_letter_keywords';
+    const recentKeywords = JSON.parse(localStorage.getItem(KEYWORD_STORAGE_KEY) || '[]');
+    const dateStr = new Date().toLocaleDateString();
+    const fallbackTopics = ["우연히 올려다본 하늘", "스스로에게 허락하는 쉼", "계절의 변화가 주는 위로", "아주 작은 성취의 기쁨", "오롯이 나만을 위한 시간"];
+    const fallbackTopic = fallbackTopics[Math.floor(Math.random() * fallbackTopics.length)];
+
+    const briefing = buildBriefing(emotionDB, formData.name);
+    const moodWeather = `${briefing.headline} ${briefing.emoji}`;
+
     fetchGeminiMorningLetter({
       name: formData.name || '',
       ampm: formData.ampm || '',
       elementName: ilgan.name,
+      moodWeather,
+      dateStr,
+      recentLog: recentEntry?.text || undefined,
+      fallbackTopic,
+      recentKeywords,
+      selectedEmotion: emo
     })
-      .then(data => { setMorningLetterAI(data); })
-      .catch(() => {
+      .then(data => { 
+        setMorningLetterAI({ letter: data.letter, affirmation: data.affirmation }); 
+        if (data.keywords && Array.isArray(data.keywords)) {
+          const prev = JSON.parse(localStorage.getItem(KEYWORD_STORAGE_KEY) || '[]');
+          const updated = [...prev, ...data.keywords].slice(-15);
+          localStorage.setItem(KEYWORD_STORAGE_KEY, JSON.stringify(updated));
+        }
+      })
+      .catch((err) => {
+        console.error(err);
         setMorningLetterAI({
           letter: `오늘 하루도 당신은 충분히 빛나고 있습니다.\n작은 것에도 감사할 수 있는 마음이 하루를 더 풍요롭게 만들어 줍니다.\n지금 이 순간, 당신의 내면에는 이미 모든 것이 준비되어 있습니다.\n오늘도 당신만의 속도로, 단단하게 걸어가세요.`,
           affirmation: '나는 오늘도 내 안의 빛을 믿는다.',
         });
       })
       .finally(() => setIsLoadingMorningLetter(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  };
 
   useEffect(() => {
     if (emotionDB.length >= 3 && !userSession && !localStorage.getItem('hasSeenCloudNudge')) {
@@ -967,42 +922,231 @@ export default function App() {
     }
   }, [emotionDB, userSession, step]);
 
+  // ── Google 계정 연결 / 로그인 ────────────────────────────────────────────────
   const handleCloudLogin = async () => {
-    try {
-      const user = await loginWithGoogle();
-      setUserSession({ uid: user.uid, displayName: user.displayName || formData.name });
-
-      const existingCloudDB = await fetchEmotionDBFromCloud(user.uid);
-      if (existingCloudDB && existingCloudDB.length > 0) {
-        setToastMsg("이전 금고 기록을 발견했습니다. 잠시 후 동기화됩니다.");
-      }
-    } catch (error) {
-      console.warn("Mock OAuth Failed.");
+    setIsSyncing(true); // 로그인/동기화 시작 로딩 상태 (리다이렉트 전 표시)
+    
+    // 리다이렉트 되기 전에 보류 중인 액션이 있다면 백업 (PROD 전용)
+    if (!import.meta.env.DEV && pendingAction) {
+      sessionStorage.setItem('here_pending_action', JSON.stringify(pendingAction));
     }
-    setShowCloudNudge(false);
-    setShowVaultPrompt(true);
+    
+    try {
+      const popupResult = await loginWithGoogle();
+
+      // DEV: 팝업 방식 — 즉시 결과 처리
+      if (import.meta.env.DEV && popupResult) {
+        const { user, operationType, hadConflict } = popupResult;
+        const isNewLink = operationType === 'link';
+
+        if (hadConflict) {
+          // linkWithPopup 충돌 → signInWithPopup 재시도 성공 케이스
+          setToastMsg('이미 연결된 Google 계정으로 로그인했습니다.');
+          setTimeout(() => setToastMsg(''), 3000);
+        } else if (isNewLink) {
+          setToastMsg('✅ 기존 기록을 그대로 유지하며 Google 계정이 연결되었습니다!');
+          setTimeout(() => setToastMsg(''), 3000);
+        } else {
+          const existingCloudDB = await fetchEmotionDBFromCloud(user.uid);
+          if (existingCloudDB) {
+            setExistingCloudData(existingCloudDB);
+            setToastMsg('이전 금고 기록을 발견했습니다. 잠시 후 동기화됩니다.');
+            setTimeout(() => setToastMsg(''), 3000);
+          } else {
+            setToastMsg('✅ Google 계정으로 로그인되었습니다!');
+            setTimeout(() => setToastMsg(''), 3000);
+          }
+        }
+
+        setShowCloudNudge(false);
+        setShowVaultPrompt(true);
+
+        // pendingAction 복원
+        if (pendingAction?.type === 'NAVIGATE') {
+          setStep(pendingAction.target);
+        } else if (step === 'login' || step === 'landing') {
+          setStep('dashboard');
+        }
+      }
+      // PROD: 리다이렉트 방식 — 페이지가 이동하므로 이후 코드는 실행되지 않음
+    } catch (error) {
+      console.error('[Auth] Google 로그인 에러:', error);
+      setToastMsg('Google 로그인에 실패했습니다. 다시 시도해주세요.');
+      setTimeout(() => setToastMsg(''), 3000);
+      setIsSyncing(false);
+    } finally {
+      // DEV: 팝업 완료 후 로딩 해제 (PROD는 페이지가 이동해 실행 안 됨)
+      if (import.meta.env.DEV) {
+        setIsSyncing(false);
+      }
+    }
+  };
+
+  // ── 이메일 인증 처리 ──────────────────────────────────────────────────────────
+  const handleEmailAuth = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!authEmail || !authPassword) {
+      setAuthError('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    if (authPassword.length < 6) {
+      setAuthError('비밀번호는 최소 6자 이상이어야 합니다.');
+      return;
+    }
+    try {
+      if (authMode === 'register') {
+        const { isNewLink } = await registerWithEmail(authEmail, authPassword);
+        const msg = isNewLink
+          ? '✅ 기존 기록을 유지하며 이메일 계정이 연결되었습니다!'
+          : '✅ 이메일 계정이 생성되었습니다!';
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 3000);
+      } else {
+        await loginWithEmail(authEmail, authPassword);
+        setToastMsg('✅ 로그인되었습니다!');
+        setTimeout(() => setToastMsg(''), 3000);
+      }
+      setShowAuthModal(false);
+      setAuthEmail('');
+      setAuthPassword('');
+      setShowCloudNudge(false);
+      setShowVaultPrompt(true);
+    } catch (error) {
+      const errorMessages = {
+        'auth/email-already-in-use': '이미 사용 중인 이메일입니다. 로그인을 시도해보세요.',
+        'auth/user-not-found': '가입된 이메일이 없습니다. 회원가입을 먼저 해주세요.',
+        'auth/wrong-password': '비밀번호가 올바르지 않습니다.',
+        'auth/invalid-email': '올바른 이메일 형식이 아닙니다.',
+        'auth/invalid-credential': '이메일 또는 비밀번호가 올바르지 않습니다.',
+      };
+      setAuthError(errorMessages[error.code] || '인증에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
+  // ── 로그아웃 ──────────────────────────────────────────────────────────────────
+  const handleLogout = async () => {
+    await firebaseLogout();
+
+    // ── 개인화 state 전체 초기화 (처음 앱을 켠 상태로 리셋) ──
+    const emptyFormData = {
+      name: '', year: '', month: '', day: '',
+      ampm: '오전', hour: '',
+      maritalStatus: 'single', hasChildren: 'no', concern: '',
+      partnerName: '', partnerYear: '', partnerMonth: '', partnerDay: '',
+      selectedGoal: '', customGoal: ''
+    };
+    setFormData(emptyFormData);
+    setEmotionDB([]);
+    setMorningLetterAI(null);
+    setMorningLetterText('');
+    setTranscriptText('');
+    setSelfAnalysisResult('');
+    setAiSections(null);
+    setMiniMapResult(null);
+    setSajuScores([60, 60, 60, 60, 60]);
+    setMirroredPoints({});
+    setSavedConcernData(null);
+    setCurrentConcernData({
+      text: '', partnerAction: '', emotions: [],
+      dynamicChips: FALLBACK_EMOTION_CHIPS,
+      dynamicQuestion: {
+        normal: '이렇게 밖으로 꺼내어 적는 것만으로도 큰 용기랍니다.',
+        bold: '지금 나를 가장 지치게 하는 감정을 골라볼까요?'
+      },
+      isWritingDone: false
+    });
+    setConcernText('');
+    setOnboardingMbti('');
+    setStep('dashboard');
+    setIsCloudSynced(false);
+    setIsEditingMyInfo(false);
+
+    // ── localStorage / sessionStorage 개인 데이터 클리어 ──
+    localStorage.removeItem('here_my_info');
+    localStorage.removeItem('Personal_Emotion_DB');
+    sessionStorage.removeItem('here_concern_data');
+
+    setToastMsg('로그아웃 되었습니다. 익명 모드로 계속 이용할 수 있습니다.');
+    setTimeout(() => setToastMsg(''), 3000);
   };
 
   const handleVaultSubmit = async () => {
+    console.log('[Vault] 1. handleVaultSubmit 호출됨 (vaultKey 길이:', vaultKey.length, ')');
     if (vaultKey.length < 4) {
       setToastMsg("금고 열쇠는 최소 4자리 이상 입력해주세요.");
+      setTimeout(() => setToastMsg(''), 3000);
       return;
     }
     setShowVaultPrompt(false);
     setIsSyncing(true);
 
+    let finalEmotionDB = [...emotionDB];
+    let isMerged = false;
+
     try {
-      const encrypted = encryptData(emotionDB, vaultKey);
+      if (existingCloudData) {
+        console.log('[Vault] 2. 기존 클라우드 데이터 병합 시도');
+        try {
+          const decryptedStr = decryptData(existingCloudData, vaultKey);
+          console.log('[Vault] 3. 복호화 성공');
+          const decryptedCloudDB = JSON.parse(decryptedStr);
+          if (Array.isArray(decryptedCloudDB)) {
+            const mergedMap = new Map();
+            decryptedCloudDB.forEach(item => mergedMap.set(item.id, item));
+            finalEmotionDB.forEach(item => mergedMap.set(item.id, item));
+            finalEmotionDB = Array.from(mergedMap.values());
+            setEmotionDB(finalEmotionDB);
+            localStorage.setItem('Personal_Emotion_DB', JSON.stringify(finalEmotionDB));
+            isMerged = true;
+            console.log('[Vault] 4. 병합 완료 (총 항목 수:', finalEmotionDB.length, ')');
+          }
+        } catch (decryptError) {
+          console.log('[Vault] 복호화 실패 (vaultKey 불일치 가능성):', decryptError);
+          setToastMsg("이전 금고의 열쇠와 일치하지 않습니다. 올바른 열쇠를 입력해주세요.");
+          setTimeout(() => setToastMsg(''), 3000);
+          setIsSyncing(false);
+          setShowVaultPrompt(true); // 열쇠를 다시 입력받도록
+          return;
+        }
+      } else {
+        console.log('[Vault] 2. 기존 데이터 없음 (병합 생략)');
+      }
+
+      console.log('[Vault] 5. 데이터 암호화 시작');
+      const encrypted = encryptData(finalEmotionDB, vaultKey);
+      console.log('[Vault] 6. Firestore 동기화(syncEmotionDBToCloud) 요청 시작 - uid:', userSession.uid);
       await syncEmotionDBToCloud(userSession.uid, encrypted);
+      console.log('[Vault] 7. Firestore 동기화 완료');
+      setExistingCloudData(null);
     } catch (e) {
-      console.error(e);
+      console.error('[Vault] 동기화 에러 발생:', e);
+      setToastMsg("저장에 실패했어요. 다시 시도해 주세요 🌿");
+      setTimeout(() => setToastMsg(''), 3000);
+      setIsSyncing(false);
+      return;
     }
 
+    console.log('[Vault] 8. 마무리 작업(setTimeout) 시작');
     setTimeout(() => {
       setIsSyncing(false);
       setIsCloudSynced(true);
-      setToastMsg("당신의 진심이 다정한 금고에 안전하게 암호화되어 보관되었습니다.");
+      setToastMsg(isMerged ? "이전 기록과 함께 안전하게 합쳐졌어요 🌿" : "당신의 진심이 다정한 금고에 안전하게 암호화되어 보관되었습니다.");
+      setTimeout(() => setToastMsg(''), 3000);
       localStorage.setItem('hasSeenCloudNudge', 'true');
+      
+      if (pendingAction) {
+        if (pendingAction.type === 'NAVIGATE') {
+          setStep(pendingAction.target);
+        } else if (pendingAction.type === 'ACTION' && typeof pendingAction.fn === 'function') {
+          if (pendingAction.originalStep) setStep(pendingAction.originalStep);
+          // 자동 저장/실행 이어서 완료
+          pendingAction.fn();
+        }
+        setPendingAction(null);
+      } else if (step === 'login') {
+        setStep('dashboard');
+      }
     }, 1500);
   };
 
@@ -1067,7 +1211,7 @@ export default function App() {
   useEffect(() => {
     if (step !== 'concern') return;
     let nextStep = guideStep;
-    const textLen = formData.concern.length;
+    const textLen = currentConcernData.text.length;
 
     if (guideStep === 0 && (textLen > 15)) nextStep = 1;
     if (guideStep === 1 && (textLen > 40)) nextStep = 2;
@@ -1077,7 +1221,7 @@ export default function App() {
       const timer = setTimeout(() => { setGuideStep(nextStep); }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [formData.concern, step, guideStep]);
+  }, [currentConcernData.text, step, guideStep]);
 
   const handleTrackSelect = (roomName) => {
     setTrackType(roomName);
@@ -1128,18 +1272,33 @@ export default function App() {
 
     if (trackType === '비밀의 방앗간') {
       try {
-        const aiJson = await fetchGeminiSelfAnalysis(formData.concern, selectedEmotions.join(', '));
+        const textWithEmotions = `${currentConcernData.text || ''} ${(currentConcernData.emotions || []).join(' ')}`;
+        const coords = calculateCoordinates(formData, textWithEmotions);
+        const quadrantResult = getQuadrantInterpretation(coords.x, coords.y, trackType);
+        const coordsDesc = `시간의 초점은 '${coords.x >= 0 ? "지금, 여기" : "어제와 내일"}', 삶의 주도성은 '${coords.y >= 0 ? "이끄는 하루" : "끌려가는 하루"}' 방향 (${quadrantResult.title})`;
+        
+        const aiJson = await fetchGeminiSelfAnalysis(
+          currentConcernData.text,
+          currentConcernData.emotions.join(', '),
+          formData.name,
+          onboardingMbti,
+          myIlgan.name,
+          coordsDesc
+        );
+        
+        console.log('[DEBUG][AI Response] fetchGeminiSelfAnalysis:', aiJson); // AI 응답 원본 확인용
+        
         if (aiJson.statusCode && aiJson.statusCode !== 'NORMAL') {
           setSelfAnalysisResult(aiJson.systemMessage);
           setAiSections({ statusCode: aiJson.statusCode });
         } else {
           // '나의 진심' 영역
           setSelfAnalysisResult(aiJson.empathy_acceptance || '');
-          // 나머지 3개 섹션
+          // 심층 분석 3단계 아코디언 섹션
           setAiSections({
-            coordinate: aiJson.cognitive_insight || '',
-            deepAnalysis: aiJson.self_reflection_question || '',
-            suggestion: aiJson.today_affirmation || '',
+            deepAnalysis1: aiJson.deep_analysis_1_voice || '',
+            deepAnalysis2: aiJson.deep_analysis_2_inner_child || '',
+            deepAnalysis3: aiJson.deep_analysis_3_action || '',
             statusCode: 'NORMAL'
           });
         }
@@ -1554,45 +1713,50 @@ export default function App() {
 
   const getHolisticReportPoints = () => {
     const rawUserName = formData.name || '당신';
+    const textWithEmotions = `${currentConcernData?.text || ''} ${(currentConcernData?.emotions || []).join(' ')}`;
+    const coords = calculateCoordinates(formData, textWithEmotions);
+    const quadrantResult = getQuadrantInterpretation(coords.x, coords.y, trackType);
+    
+    const coordFallbackText = `${rawUserName} 님의 텍스트를 분석한 결과, 시간의 초점은 **[${coords.x >= 0 ? "'지금, 여기'에 머무는 중" : "'어제와 내일'을 떠도는 중"}]**, 삶의 주도성은 **[${coords.y >= 0 ? '이끄는 하루' : '끌려가는 하루'}]** 방향에 위치합니다.\n\n이 좌표는 좋고 나쁨의 판단이 아닙니다. 지금 ${rawUserName} 님의 마음이 시간과 삶의 주도권 측면에서 어디에 머물고 있는지를 보여주는 솔직한 지도입니다.`;
 
     // ── AI 응답이 있으면 우선 사용, 없으면 로컬 키워드 기반 폴백 ──
-    if (aiSections && aiSections.coordinate) {
-      const coord = aiSections.coordinate;
-      // coord가 객체({ x, y, description })인 경우와 문자열인 경우 모두 대응
-      const descText = typeof coord === 'object' && coord.description
-        ? coord.description
-        : (typeof coord === 'string' ? coord : '');
+    if (aiSections && aiSections.deepAnalysis1) {
       return [
         {
           title: `1. 마음의 좌표계: 현재 위치 확인`,
-          desc: descText
+          desc: coordFallbackText
         },
         {
-          title: `2. 심층 해석`,
-          desc: aiSections.deepAnalysis
+          title: `2. 내 마음 깊은 곳의 목소리`,
+          desc: aiSections.deepAnalysis1
         },
         {
-          title: `3. 전문가의 제안`,
-          desc: aiSections.suggestion
+          title: `3. 내 안의 어린아이 안아주기`,
+          desc: aiSections.deepAnalysis2
+        },
+        {
+          title: `4. 나를 위한 다정한 행동 지침`,
+          desc: aiSections.deepAnalysis3
         }
       ];
     }
 
     // ── 폴백: 로컬 키워드 기반 생성 ──
-    const coords = calculateCoordinates(formData);
-    const quadrantResult = getQuadrantInterpretation(coords.x, coords.y, trackType);
-
     return [
       {
         title: `1. 마음의 좌표계: 현재 위치 확인`,
-        desc: `${rawUserName} 님의 텍스트를 분석한 결과, 시간의 초점은 **[${coords.x >= 0 ? "'지금, 여기'에 머무는 중" : "'어제와 내일'을 떠도는 중"}]**, 삶의 주도성은 **[${coords.y >= 0 ? '이끄는 하루' : '끌려가는 하루'}]** 방향에 위치합니다.\n\n이 좌표는 좋고 나쁨의 판단이 아닙니다. 지금 ${rawUserName} 님의 마음이 시간과 삶의 주도권 측면에서 어디에 머물고 있는지를 보여주는 솔직한 지도입니다.`
+        desc: coordFallbackText
       },
       {
-        title: `2. 심층 해석: ${quadrantResult.title}`,
-        desc: `${quadrantResult.desc}\n\n지금 느끼는 복잡한 마음은 일시적인 혼란이 아니라, 이 사분면에 머물며 스스로를 지키거나 한 단계 나아가기 위한 매우 자연스러운 과정입니다.`
+        title: `2. 내 마음 깊은 곳의 목소리`,
+        desc: `${quadrantResult.title}\n\n${quadrantResult.desc}`
       },
       {
-        title: `3. 전문가의 제안: 머무르기 (Grounding)`,
+        title: `3. 내 안의 어린아이 안아주기`,
+        desc: `지금 느끼는 복잡한 마음은 일시적인 혼란이 아니라, 이 사분면에 머물며 스스로를 지키거나 한 단계 나아가기 위한 매우 자연스러운 과정입니다.`
+      },
+      {
+        title: `4. 나를 위한 다정한 행동 지침`,
         desc: `이 위치에서 다음 스텝으로 유연하게 넘어가기 위해, 너무 서두르거나 스스로를 탓하지 마세요.\n\n지금은 그저 내 마음이 이 좌표에 잠시 머물러 있음을 있는 그대로 '바라봐주는 것'만으로도 충분합니다.`
       }
     ];
@@ -1764,7 +1928,7 @@ export default function App() {
   return (
     <>
       {/* ── 전역 GNB (Header) ── */}
-      {!isSharedMode && step === 'dashboard' && (
+      {!isSharedMode && (step === 'dashboard' || step === 'category') && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, margin: '0 auto', maxWidth: '480px', zIndex: 9999,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1789,12 +1953,14 @@ export default function App() {
               </svg>
             </button>
             <button
-              onClick={() => setStep('mypage')}
+              onClick={() => {
+                setToastMsg('준비 중입니다');
+                setTimeout(() => setToastMsg(''), 3000);
+              }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
+                <path d="M6 3h12l4 6-10 13L2 9z"></path>
               </svg>
             </button>
           </div>
@@ -1802,11 +1968,11 @@ export default function App() {
       )}
 
       {/* ── 하단 탭 바 (Bottom Tab Bar) ── */}
-      {!isSharedMode && step === 'dashboard' && (
+      {!isSharedMode && (step === 'dashboard' || step === 'category') && (
         <div style={{
           position: 'fixed', bottom: 0, left: 0, right: 0, margin: '0 auto', maxWidth: '480px', zIndex: 9999,
           display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-          padding: '12px 20px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+          padding: '12px 8px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
           backgroundColor: '#FFFFFF',
           borderTop: '1px solid #EEEEEE',
           boxShadow: '0 -4px 16px rgba(0,0,0,0.06)'
@@ -1816,11 +1982,22 @@ export default function App() {
             onClick={() => { setStep('dashboard'); window.scrollTo(0, 0); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}
           >
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E2725B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={step === 'dashboard' ? "#E2725B" : "#A0A0A0"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
               <polyline points="9 22 9 12 15 12 15 22"></polyline>
             </svg>
-            <span style={{ fontSize: '0.65rem', color: '#E2725B', fontWeight: '700' }}>홈</span>
+            <span style={{ fontSize: '0.65rem', color: step === 'dashboard' ? '#E2725B' : '#A0A0A0', fontWeight: step === 'dashboard' ? '700' : '600', whiteSpace: 'nowrap' }}>홈</span>
+          </button>
+
+          {/* 상담실 탭 (구 카테고리/다락방) */}
+          <button
+            onClick={() => { setStep('attic'); window.scrollTo(0, 0); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={step === 'attic' ? "#E2725B" : "#A0A0A0"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span style={{ fontSize: '0.65rem', color: step === 'attic' ? '#E2725B' : '#A0A0A0', fontWeight: step === 'attic' ? '700' : '600', whiteSpace: 'nowrap' }}>상담실</span>
           </button>
 
           {/* 내 마음 창문 (메인 액션 버튼) */}
@@ -1828,38 +2005,51 @@ export default function App() {
             onClick={() => setIsWeatherOpen(true)}
             style={{ 
               background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1,
-              transform: 'translateY(-10px)'
+              transform: 'translateY(0px)'
             }}
           >
             <div style={{
-              width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#E2725B',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 8px 20px rgba(226, 114, 91, 0.4)',
-              marginBottom: '4px'
+              width: '54px', height: '54px', borderRadius: '50%', backgroundColor: '#E2725B',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(226, 114, 91, 0.4)',
+              lineHeight: '1.2'
             }}>
-              <span style={{ fontSize: '1.4rem', filter: 'brightness(1.2)' }}>🪟</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#FFFFFF' }}>마음</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#FFFFFF' }}>창문</span>
             </div>
-            <span style={{ fontSize: '0.65rem', color: '#E2725B', fontWeight: '800' }}>내 마음 창문</span>
+          </button>
+
+          {/* MY 탭 */}
+          <button
+            onClick={() => goToStep('mypage', { requireLogin: true })}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={step === 'mypage' ? "#E2725B" : "#A0A0A0"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span style={{ fontSize: '0.65rem', color: step === 'mypage' ? '#E2725B' : '#A0A0A0', fontWeight: step === 'mypage' ? '700' : '600', whiteSpace: 'nowrap' }}>MY</span>
           </button>
 
           {/* 리포트 탭 */}
           <button
-            onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('monthly_analytics'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }}
+            onClick={() => { setIsEnteringRoom(true); setTimeout(() => { goToStep('monthly_analytics', { requireLogin: true }); setIsEnteringRoom(false); }, 500); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}
           >
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#A0A0A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={step === 'monthly_analytics' ? "#E2725B" : "#A0A0A0"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="3" y1="9" x2="21" y2="9"></line>
               <line x1="9" y1="21" x2="9" y2="9"></line>
             </svg>
-            <span style={{ fontSize: '0.65rem', color: '#A0A0A0', fontWeight: '600' }}>리포트</span>
+            <span style={{ fontSize: '0.65rem', color: step === 'monthly_analytics' ? '#E2725B' : '#A0A0A0', fontWeight: step === 'monthly_analytics' ? '700' : '600', whiteSpace: 'nowrap' }}>리포트</span>
           </button>
         </div>
       )}
 
-      <div className={isSharedMode ? 'shared-bg' : 'landing-bg'} style={{ ...styles.container, backgroundColor: isSharedMode ? 'transparent' : '#FDFBF7', opacity: visible ? 1 : 0, transition: 'opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1)', willChange: 'opacity, background-color', paddingTop: (!isSharedMode && step === 'dashboard') ? '70px' : '20px', paddingBottom: (!isSharedMode && step === 'dashboard') ? '100px' : '20px' }}>
+      <div className={isSharedMode ? 'shared-bg' : 'landing-bg'} style={{ ...styles.container, backgroundColor: isSharedMode ? 'transparent' : (step === 'mypage' ? '#FAFAFA' : '#FDFBF7'), opacity: visible ? 1 : 0, transition: 'opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1)', willChange: 'opacity, background-color', paddingTop: (!isSharedMode && (step === 'dashboard' || step === 'category')) ? '5px' : '20px', paddingBottom: (!isSharedMode && (step === 'dashboard' || step === 'category')) ? '100px' : '20px' }}>
         <style>
           {`
+          @keyframes spin { 100% { transform: rotate(360deg); } }
           @keyframes fadeInSlide { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: translateY(0); } }
           .dynamic-fade-layer { animation: fadeInSlide 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards; will-change: opacity, transform; }
           @keyframes skeletonPulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
@@ -1973,6 +2163,16 @@ export default function App() {
         {/* 전체를 래핑하는 애니메이션 전용 내부 컨테이너 */}
         <div className={isEnteringRoom ? 'room-enter-anim' : ''} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           
+          {/* ── 상담실 (Attic View) ── */}
+          {step === 'attic' && (
+            <AtticView
+              userName={formData.name || '당신'}
+              onReset={() => setStep('dashboard')}
+              setToastMsg={setToastMsg}
+              onChatStateChange={setIsAtticChatting}
+            />
+          )}
+
           {/* ── 마이페이지 (My Page) ── */}
           {step === 'mypage' && (
             <MyPage 
@@ -1980,7 +2180,16 @@ export default function App() {
               mbtiTrait={userMbtiTrait} 
               onboardingMbti={onboardingMbti}
               emotionDB={emotionDB} 
-              onBack={() => setStep('dashboard')} 
+              onBack={() => setStep('dashboard')}
+              onGoToJournal={() => setStep('mind_journal')}
+            />
+          )}
+
+          {/* ── 마음 저널 (Mind Journal) ── */}
+          {step === 'mind_journal' && (
+            <MindJournal
+              emotionDB={emotionDB}
+              onBack={() => setStep('mypage')}
             />
           )}
 
@@ -2025,14 +2234,15 @@ export default function App() {
                   <button onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('onboarding'); setOnboardingStep(1); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', backgroundColor: '#03C75A', color: 'white', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', transition: 'opacity 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     네이버로 시작하기
                   </button>
-                  <button onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('onboarding'); setOnboardingStep(1); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', color: '#4A4A4A', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', transition: 'background-color 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <button onClick={handleCloudLogin} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', color: '#4A4A4A', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', transition: 'background-color 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
                     구글로 시작하기
                   </button>
                 </div>
               </div>
 
               {/* 최하단 서브 링크 */}
-              <div style={{ fontSize: '0.85rem', color: '#A3A3A3', textDecoration: 'none', cursor: 'pointer', marginTop: '10px' }} onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('onboarding'); setOnboardingStep(1); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }}>
+              <div style={{ fontSize: '0.85rem', color: '#A3A3A3', textDecoration: 'none', cursor: 'pointer', marginTop: '10px' }} onClick={() => { setAuthMode('login'); setShowAuthModal(true); }}>
                 이메일로 다정하게 시작하기
               </div>
             </div>
@@ -2209,8 +2419,8 @@ export default function App() {
             />
           )}
 
-          <div style={{ ...styles.card, maxWidth: step === 'result' ? '640px' : '480px', display: (step === 'login' || step === 'onboarding' || step === 'daily_forecast') ? 'none' : 'flex' }}>
-            {step !== 'dashboard' && step !== 'shared_flow' && (
+          <div style={{ ...styles.card, paddingTop: (step === 'dashboard' || step === 'category') ? '16px' : styles.card.paddingTop, maxWidth: step === 'result' ? '640px' : '480px', display: (step === 'login' || step === 'onboarding' || step === 'daily_forecast' || step === 'mypage' || step === 'mind_journal' || step === 'attic') ? 'none' : 'flex' }}>
+            {step !== 'dashboard' && step !== 'category' && step !== 'shared_flow' && (
               <button style={styles.backButton} onClick={handleBack}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                   <path d="M15 18L9 12L15 6" stroke="#D8D8D8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -2218,7 +2428,7 @@ export default function App() {
               </button>
             )}
 
-            <div style={{ ...styles.scrollContent, paddingBottom: (step === 'dashboard' && !isSharedMode) ? '120px' : styles.scrollContent.paddingBottom }}>
+            <div style={{ ...styles.scrollContent, paddingBottom: ((step === 'dashboard' || step === 'category') && !isSharedMode) ? '120px' : styles.scrollContent.paddingBottom }}>
               {isLoadingResult && (
                 <LoadingScreen
                   trackType={trackType}
@@ -2241,9 +2451,9 @@ export default function App() {
               )}
 
               {/* ═══════════════════════════════════════════
-                🌤️ 메인 대시보드 (두 트랙 구조)
+                🌤️ 메인 대시보드 및 카테고리 (두 트랙 구조 공용)
             ═══════════════════════════════════════════ */}
-              {step === 'dashboard' && (() => {
+              {(step === 'dashboard') && (() => {
                 // ── SVG 라인 아이콘 정의 (이모지 대체) ──
                 const SvgMorning = ({ color = 'rgba(255,255,255,0.85)' }) => (
                   <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2281,26 +2491,52 @@ export default function App() {
                 const isDay = hour >= 10 && hour < 17;
 
                 // ── 사용자화(Personalization) 변수 ──
-                const userNameDisplay = formData.name || '당신';
+                // 실제 로그인(비익명) 상태일 때만 개인화된 이름 표시
+                const isLoggedInUser = userSession && !userSession.isAnonymous;
+                const userNameDisplay = (isLoggedInUser && formData.name) ? formData.name : '당신';
 
                 // 오전 배너: 기질별 지지 포인트 예고
                 const _pvIlgan = formData.year ? calculateIlgan(formData.year, formData.month, formData.day) : { element: 0 };
                 const _pvLinesBank = [
-                  ['오늘은 조급함을 내려놓고 너만의 속도를 존중하는 법을 알려줄게.', '오늘은 타인의 시선에 흔들리지 않고 너의 뿌리를 단단히 내리도록 도울게.', '오늘은 네가 억누르지 않고 자연스럽게 자라나는 하루가 되길 응원할게.'],
-                  ['오늘은 네 안의 따뜻한 열정을 스스로 칭찬하고 밝히도록 도와줄게.', '오늘은 완벽하지 않은 네 모습도 있는 그대로 사랑하게 만들어줄게.', '오늘은 남의 기준 대신, 가장 너다운 에너지를 펼치는 하루를 제안할게.'],
-                  ['오늘은 흔들리는 상황 속에서도 너의 중심을 잃지 않는 힘을 길러줄게.', '오늘은 어떤 잣대도 없이, 있는 그대로의 너를 부드럽게 안아주도록 도울게.', '오늘은 성급하게 판단하지 않고 너의 마음에 고요히 머무는 법을 나눌게.'],
-                  ['오늘은 네가 스스로에게 세워둔 예리한 잣대를 다정하게 거둘 수 있게 도와줄게.', '오늘은 주변의 불필요한 소음을 차단하고, 온전히 너에게 집중하도록 응원할게.', '오늘은 부러지기보다 유연하게 구부러지는 여유를 가지도록 곁에 있을게.'],
-                  ['오늘은 억지로 상황을 통제하기보다 자연스럽게 흘러가는 법을 속삭여줄게.', '오늘은 네 내면 깊은 곳에 있는 지혜로운 목소리에 귀 기울이게 해줄게.', '오늘은 어떤 변화 속에서도 유연하고 부드럽게 호흡하는 하루를 제안할게.']
+                  ['오늘은 조급함을 내려놓고 당신만의 속도를 가만히 존중해드릴게요.', '오늘은 타인의 시선에 흔들리지 않고 그대의 뿌리를 단단히 내리도록 곁에 있을게요.', '오늘은 당신이 억누르지 않고 자연스럽게 자라나는 하루가 되길 조용히 응원해요.'],
+                  ['오늘은 당신 안의 따뜻한 열정을 스스로 칭찬하고 밝히도록 도와드릴게요.', '오늘은 완벽하지 않은 그대의 모습도 있는 그대로 사랑할 수 있도록 함께할게요.', '오늘은 남의 기준 대신, 가장 당신다운 에너지를 펼치는 하루를 살며시 제안해요.'],
+                  ['오늘은 흔들리는 상황 속에서도 그대의 중심을 잃지 않는 힘을 함께 길러봐요.', '오늘은 어떤 잣대도 없이, 있는 그대로의 당신을 부드럽게 안아드릴게요.', '오늘은 성급하게 판단하지 않고 당신의 마음에 고요히 머무는 법을 나눠봐요.'],
+                  ['오늘은 그대가 스스로에게 세워둔 예리한 잣대를 다정하게 내려놓도록 도와드릴게요.', '오늘은 주변의 불필요한 소음을 차단하고, 온전히 당신에게 집중할 수 있도록 응원해요.', '오늘은 부러지기보다 유연하게 구부러지는 여유를 함께 가져봐요.'],
+                  ['오늘은 억지로 상황을 통제하기보다 자연스럽게 흘러가는 법을 살며시 속삭여드릴게요.', '오늘은 당신 내면 깊은 곳에 있는 지혜로운 목소리에 함께 귀 기울여봐요.', '오늘은 어떤 변화 속에서도 유연하고 부드럽게 호흡하는 하루를 함께 그려봐요.']
                 ];
                 const _todayIdx = new Date().getDate();
                 const _elementLines = _pvLinesBank[_pvIlgan.element] || _pvLinesBank[0];
                 const _morningPreview = _elementLines[_todayIdx % _elementLines.length];
 
-                const baseBannerConfig = isMorning
-                  ? { theme: 'light', Icon: SvgMorning, label: 'TODAY\'S GREETING', title: `오늘 ${userNameDisplay} 님을 위한\n따뜻한 안부`, sub: `${userMbtiTrait.name} 성향을 가진 ${userNameDisplay} 님의 오늘을 예보할게요.`, preview: _morningPreview, gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)', onClick: () => { setIsEnteringRoom(true); setTimeout(() => { setStep('morning_letter'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } }
-                  : isDay
-                    ? { theme: 'light', Icon: SvgForecast, label: 'DAILY FORECAST', title: `오늘 ${userNameDisplay} 님을 위한\n행동 예보 시스템`, sub: `${userMbtiTrait.name} 성향과 연동된 선제적 감정 기상청`, gradient: 'linear-gradient(135deg, #F4F9F4 0%, #E8F4F8 50%, #EBF0F5 100%)', onClick: () => { setIsEnteringRoom(true); setTimeout(() => { setStep('daily_forecast'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } }
-                    : { theme: 'light', Icon: SvgDinner, label: 'EVENING TABLE', title: `오늘 저녁,\n${userNameDisplay} 님의 식탁 위에 놓인\n마음의 짐을 함께\n내려놓아 볼까요?`, sub: `가족과 함께하는 ${userNameDisplay} 님의 저녁 이야기`, gradient: 'linear-gradient(135deg, #FDF4E3 0%, #FCE8D5 50%, #F5EAE1 100%)', onClick: () => { setTrackType('다정한 식탁'); setIsEnteringRoom(true); setTimeout(() => { setStep('partner_info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } };
+                let baseBannerConfig;
+                
+                if (!isLoggedInUser) {
+                  baseBannerConfig = {
+                    theme: 'light', Icon: SvgMorning, label: 'TODAY\'S GREETING',
+                    title: `오늘 당신을 위한\n따뜻한 편지`,
+                    sub: `오늘 하루, 당신의 마음을 살며시 들여다볼게요.`,
+                    preview: _morningPreview, 
+                    gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)', 
+                    onClick: () => { 
+                      goToStep('morning_letter', { requireLogin: true });
+                    }
+                  };
+                } else {
+                  baseBannerConfig = isMorning
+                    ? { theme: 'light', Icon: SvgMorning, label: 'TODAY\'S GREETING',
+                        title: `오늘 ${userNameDisplay} 님을 위한\n따뜻한 안부`,
+                        sub: `${userMbtiTrait.name} 성향을 가진 ${userNameDisplay} 님의 오늘 하루를 살며시 들여다볼게요.`,
+                        preview: _morningPreview, gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)', onClick: () => { setIsEnteringRoom(true); setTimeout(() => { setStep('morning_letter'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } }
+                    : isDay
+                      ? { theme: 'light', Icon: SvgForecast, label: 'DAILY FORECAST',
+                          title: `오늘 ${userNameDisplay} 님을 위한\n마음 날씨 이야기`,
+                          sub: `${userMbtiTrait.name} 성향을 가진 ${userNameDisplay} 님의 오늘 마음을 가만히 그려볼게요.`,
+                          gradient: 'linear-gradient(135deg, #F4F9F4 0%, #E8F4F8 50%, #EBF0F5 100%)', onClick: () => { setIsEnteringRoom(true); setTimeout(() => { setStep('daily_forecast'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } }
+                      : { theme: 'light', Icon: SvgDinner, label: 'EVENING TABLE',
+                          title: `오늘 저녁,\n${userNameDisplay} 님의 식탁 위에 놓인\n마음의 짐을 함께\n내려놓아 볼까요?`,
+                          sub: `${userNameDisplay} 님의 저녁, 가족과 나누는 다정한 이야기를 함께 펼쳐봐요.`,
+                          gradient: 'linear-gradient(135deg, #FDF4E3 0%, #FCE8D5 50%, #F5EAE1 100%)', onClick: () => { setTrackType('다정한 식탁'); setIsEnteringRoom(true); setTimeout(() => { setStep('partner_info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } };
+                }
 
                 // ── [Proactive] 선제적 예보가 감지된 경우 배너 덮어쓰기 ──
                 const bannerConfig = proactiveForecast 
@@ -2322,9 +2558,9 @@ export default function App() {
                 );
 
                 const sanctuaries = [
-                  { id: 'my-room', Icon: SvgSelf, title: '나의 방', sub: 'SELF · REFLECTION', desc: userMbtiTrait.roomText, color: '#B85C4A', accentBg: '#FBF1EE', border: '#E8C4BC', onClick: () => { setTrackType('비밀의 방앗간'); setIsEnteringRoom(true); setTimeout(() => { setStep(formData.name ? 'concern' : 'info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } },
-                  { id: 'family-room', Icon: SvgFamily, title: '가족의 방', sub: 'FAMILY · HEALING', desc: '서로의 다름 수용\n다정한 대화 처방전', color: '#7A5C48', accentBg: '#FAF5F0', border: '#D9C9BC', onClick: () => { setTrackType('다정한 식탁'); setIsEnteringRoom(true); setTimeout(() => { setStep('partner_info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } },
-                  { id: 'relation-room', Icon: SvgRelation, title: '관계의 방', sub: 'RELATION · BOUNDARY', desc: '건강한 거리 두기\n페르소나 실전 화법', color: '#2E5B7A', accentBg: '#EEF4F9', border: '#B8CEDE', onClick: () => { setTrackType('나를 지키는 울타리'); setIsEnteringRoom(true); setTimeout(() => { setStep('partner_info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } },
+                  { id: 'my-room', trackType: '비밀의 방앗간', Icon: SvgSelf, title: '나의 방', sub: 'SELF · REFLECTION', desc: userMbtiTrait.roomText, color: '#B85C4A', accentBg: '#FBF1EE', border: '#E8C4BC', onClick: () => { setTrackType('비밀의 방앗간'); setIsEnteringRoom(true); setTimeout(() => { setStep(formData.name ? 'concern' : 'info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } },
+                  { id: 'family-room', trackType: '다정한 식탁', Icon: SvgFamily, title: '가족의 방', sub: 'FAMILY · HEALING', desc: '서로의 다름 수용\n다정한 대화 처방전', color: '#7A5C48', accentBg: '#FAF5F0', border: '#D9C9BC', onClick: () => { setTrackType('다정한 식탁'); setIsEnteringRoom(true); setTimeout(() => { setStep('partner_info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } },
+                  { id: 'relation-room', trackType: '나를 지키는 울타리', Icon: SvgRelation, title: '관계의 방', sub: 'RELATION · BOUNDARY', desc: '건강한 거리 두기\n페르소나 실전 화법', color: '#2E5B7A', accentBg: '#EEF4F9', border: '#B8CEDE', onClick: () => { setTrackType('나를 지키는 울타리'); setIsEnteringRoom(true); setTimeout(() => { setStep('partner_info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } },
                 ];
 
                 // 테마에 따른 동적 색상 설정
@@ -2360,7 +2596,7 @@ export default function App() {
                         <p style={{ fontSize: '0.82rem', color: cSub, margin: '0 0 12px 0', lineHeight: '1.6', wordBreak: 'keep-all', fontWeight: isLight ? '500' : '400' }}>{bannerConfig.sub}</p>
                         {bannerConfig.preview && (
                           <div style={{ margin: '0 0 18px 0', padding: '16px 24px', backgroundColor: cPreviewBg, borderRadius: '10px', borderLeft: `3px solid ${cPreviewBorder}` }}>
-                            <span style={{ fontSize: '0.65rem', color: cPreviewLabel, letterSpacing: '1.5px', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>오늘의 지지 포인트 예고</span>
+                            <span style={{ fontSize: '0.65rem', color: cPreviewLabel, letterSpacing: '1.5px', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>오늘 그대에게 전하고 싶은 말</span>
                             <span style={{ fontSize: '0.85rem', color: cPreviewText, fontStyle: 'italic', lineHeight: '1.6', fontFamily: '"Nanum Myeongjo", serif', fontWeight: isLight ? '600' : '400' }}>{bannerConfig.preview}</span>
                           </div>
                         )}
@@ -2372,7 +2608,7 @@ export default function App() {
                     </div>
 
                     {/* ── 핵심 콘텐츠 리스트: 3개의 방 (1열 세로형) ── */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '32px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '24px' }}>
                       {sanctuaries.map(s => (
                         <div
                           key={s.id} id={s.id} onClick={s.onClick}
@@ -2394,12 +2630,12 @@ export default function App() {
                           
                           {/* 우측 끝: 뱃지와 화살표 */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
-                            {emotionDB.filter(r => r.trackType && s.title.includes(r.trackType === '비밀의 방앗간' ? '나의' : r.trackType === '다정한 식탁' ? '가족' : r.trackType === '나를 지키는 울타리' ? '관계' : '청소년')).length > 0 && (
+                            {emotionDB.filter(r => r.trackType === s.trackType).length > 0 && (
                               <div
                                 onClick={(e) => { e.stopPropagation(); setStep('monthly_report'); window.scrollTo(0, 0); }}
                                 style={{ fontSize: '0.68rem', color: s.color, fontWeight: '700', backgroundColor: 'rgba(255,255,255,0.8)', padding: '4px 10px', borderRadius: '10px', border: `1px solid ${s.border}` }}
                               >
-                                기록 {emotionDB.filter(r => r.trackType && s.title.includes(r.trackType === '비밀의 방앗간' ? '나의' : r.trackType === '다정한 식탁' ? '가족' : r.trackType === '나를 지키는 울타리' ? '관계' : '청소년')).length}개
+                                기록 {emotionDB.filter(r => r.trackType === s.trackType).length}개
                               </div>
                             )}
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}><path d="M9 18l6-6-6-6"/></svg>
@@ -2408,35 +2644,16 @@ export default function App() {
                       ))}
                     </div>
 
-                    {/* ── 프리미엄 배너: 월간 심리 성장 리포트 (슬림형) ── */}
-                    <div
-                      onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('monthly_analytics'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }}
-                      style={{ marginTop: '8px', background: 'linear-gradient(135deg, #FDF0E6 0%, #F8EFEA 100%)', border: '1px solid #F0DFD8', borderRadius: '12px', padding: '14px 18px', cursor: 'pointer', transition: 'transform 0.18s ease, box-shadow 0.18s ease', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', position: 'relative', overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.04)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.02)'; }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', zIndex: 1 }}>
-                        <div style={{ width: '32px', height: '32px', backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" fill="#FDF0E6" stroke="#E2725B" strokeWidth="1.5"/>
-                            <path d="M8 14C8 14 9.5 16 12 16C14.5 16 16 14 16 14" stroke="#E2725B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                            <path d="M9 9H9.01" stroke="#E2725B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <path d="M15 9H15.01" stroke="#E2725B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                          <span style={{ fontSize: '0.85rem', color: '#B85C4A', fontWeight: '800', letterSpacing: '-0.3px' }}>[Premium] {userNameDisplay} 님의 {new Date().getMonth() + 1}월 심리 성장 리포트</span>
-                          <span style={{ fontSize: '0.7rem', color: '#887A75', marginTop: '2px' }}>이번 달 내 마음이 만들어낸 기후 변화 확인하기</span>
-                        </div>
-                      </div>
-                      
-                      <div style={{ zIndex: 1, color: '#B85C4A', display: 'flex', alignItems: 'center' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-                      </div>
-                    </div>
+                    {/* ── 프리미엄 배너: 월간 심리 성장 리포트 (캐러셀) ── */}
+                    <CarouselBanner
+                      userNameDisplay={userNameDisplay}
+                      onPremiumClick={() => {
+                        setIsEnteringRoom(true);
+                        setTimeout(() => { goToStep('monthly_analytics', { requireLogin: true }); setIsEnteringRoom(false); }, 500);
+                      }}
+                    />
 
-                    {/* ── 하단 여백 ── */}
-                    <div style={{ height: '40px' }} />
+
 
                   </div>
                 );
@@ -2470,7 +2687,7 @@ export default function App() {
                 const dateStr = `${today.getMonth() + 1}월 ${today.getDate()}일`;
                 const affirmation = morningLetterAI?.affirmation || '';
                 const letter = morningLetterAI?.letter || '';
-                const isTranscribed = transcriptText.trim() === affirmation && affirmation.length > 0;
+                const isTranscribed = transcriptText.length >= affirmation.length && affirmation.length > 0;
 
                 return (
                   <div className="dynamic-fade-layer" style={{ padding: '20px 4px 30px 4px', display: 'flex', flexDirection: 'column', gap: '0' }}>
@@ -2494,6 +2711,38 @@ export default function App() {
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '60px 0' }}>
                         <div style={{ width: '32px', height: '32px', border: '3px solid #EBD9CE', borderTopColor: '#E2725B', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                         <p style={{ margin: 0, fontSize: '0.88rem', color: '#B0926A', fontWeight: '600', letterSpacing: '0.5px' }}>오늘의 편지를 쓰고 있어요...</p>
+                      </div>
+                    )}
+
+                    {/* ── 감정 선택 칩 (편지 생성 전) ── */}
+                    {!isLoadingMorningLetter && !morningLetterAI && (
+                      <div className="ml-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', padding: '40px 0' }}>
+                        <p style={{ margin: 0, fontSize: '0.95rem', color: '#666', fontWeight: '500', letterSpacing: '0px' }}>오늘 느껴지는 감정 카드를 하나 선택해 보세요.</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', maxWidth: '320px' }}>
+                          {['🌱 평온함', '☁️ 불안', '🌧️ 슬픔', '🔥 분노', '🫧 무기력', '✨ 설렘'].map(emo => (
+                            <button
+                              key={emo}
+                              onClick={() => handleStartMorningLetter(emo)}
+                              style={{
+                                background: '#FFF', border: '1px solid #EAEAEA', borderRadius: '20px', padding: '10px 18px',
+                                fontSize: '0.9rem', color: '#444', fontWeight: '700', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = '#E2725B'; e.currentTarget.style.color = '#E2725B'; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = '#EAEAEA'; e.currentTarget.style.color = '#444'; }}
+                            >
+                              {emo}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => handleStartMorningLetter(null)}
+                          style={{
+                            marginTop: '12px', background: 'none', border: 'none', color: '#999', fontSize: '0.85rem', textDecoration: 'underline', textUnderlineOffset: '3px', cursor: 'pointer'
+                          }}
+                        >
+                          건너뛰기
+                        </button>
                       </div>
                     )}
 
@@ -2522,7 +2771,7 @@ export default function App() {
                           <div style={{ width: '100%', backgroundColor: '#F7F3EF', borderRadius: '14px', padding: '18px 22px', marginBottom: '14px', borderLeft: '3px solid #E2725B' }}>
                             <div style={{ fontSize: '0.65rem', color: '#C4A99A', letterSpacing: '2px', fontWeight: '700', marginBottom: '8px' }}>오늘의 긍정 확언</div>
                             <p style={{ margin: 0, fontSize: '1.05rem', color: '#4A3728', fontWeight: '700', lineHeight: '1.6', fontFamily: '"Nanum Myeongjo", serif', wordBreak: 'keep-all' }}>
-                              "{affirmation}"
+                              {affirmation}
                             </p>
                           </div>
 
@@ -2530,37 +2779,67 @@ export default function App() {
                             위 확언을 천천히 따라 써보세요. 손끝으로 내면화됩니다.
                           </div>
 
-                          {/* 덧입히기 입력창 */}
+                          {/* 덧입히기 입력창 (트레이싱 방식) */}
                           <div style={{
-                            position: 'relative', width: '100%', height: '56px',
+                            position: 'relative', width: '100%', minHeight: '64px',
                             backgroundColor: '#F8F8F8', borderRadius: '12px',
                             border: `1.5px solid ${isTranscribed ? '#B8D9C5' : '#E8E8E8'}`,
                             transition: 'border-color 0.4s ease', overflow: 'hidden'
                           }}>
-                            {/* 가이드 텍스트 */}
+                            {/* 가이드 텍스트 (트레이싱 배경) */}
                             <div style={{
-                              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                              display: 'flex', alignItems: 'center', paddingLeft: '22px',
-                              color: '#D8D8D8', fontSize: '0.97rem', fontWeight: '500',
-                              pointerEvents: 'none', fontFamily: 'inherit', userSelect: 'none',
+                              position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                              padding: '20px 45px 20px 22px',
+                              fontSize: '0.97rem', fontWeight: '500', lineHeight: '1.5',
+                              fontFamily: '"Nanum Myeongjo", serif', letterSpacing: '0px', wordSpacing: '0px', margin: 0, border: 'none',
+                              pointerEvents: 'none', userSelect: 'none',
+                              whiteSpace: 'pre-wrap', wordBreak: 'keep-all',
+                              boxSizing: 'border-box', display: 'block'
                             }}>
-                              {affirmation}
+                              {affirmation.split('').map((char, idx) => {
+                                const activeLen = isComposing ? Math.max(0, transcriptText.length - 1) : transcriptText.length;
+                                const isNextChar = idx === activeLen && !isTranscribed;
+                                return (
+                                  <span key={idx} style={{
+                                    color: idx < activeLen ? (isTranscribed ? '#2A6644' : '#E2725B') : '#D8D8D8',
+                                    textDecoration: isNextChar ? 'underline' : 'none',
+                                    textDecorationColor: isNextChar ? '#E2725B' : 'transparent',
+                                    textDecorationThickness: '2.5px',
+                                    textUnderlineOffset: '4px',
+                                    transition: 'color 0.2s ease, text-decoration-color 0.2s ease'
+                                  }}>
+                                    {char}
+                                  </span>
+                                );
+                              })}
                             </div>
                             {/* 실제 입력창 */}
-                            <input
-                              type="text"
+                            <textarea
                               className="ml-affirmation-input"
                               value={transcriptText}
-                              onChange={e => { if (e.target.value.length <= affirmation.length + 2) setTranscriptText(e.target.value); }}
+                              onCompositionStart={() => setIsComposing(true)}
+                              onCompositionEnd={(e) => {
+                                setIsComposing(false);
+                                const val = e.target.value.replace(/\n/g, '');
+                                if (val.length <= affirmation.length) setTranscriptText(val);
+                              }}
+                              onChange={e => { 
+                                const val = e.target.value.replace(/\n/g, ''); 
+                                if (val.length <= affirmation.length) setTranscriptText(val); 
+                              }}
                               style={{
-                                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                                backgroundColor: 'transparent', border: 'none', outline: 'none',
-                                color: isTranscribed ? '#2A6644' : '#333333',
-                                fontSize: '0.97rem', fontWeight: '500', fontFamily: 'inherit',
-                                caretColor: '#E2725B', boxSizing: 'border-box', paddingLeft: '22px',
-                                transition: 'color 0.4s ease',
+                                display: 'block', width: '100%', minHeight: '64px', height: '100%',
+                                backgroundColor: 'transparent', outline: 'none',
+                                color: 'transparent',
+                                fontSize: '0.97rem', fontWeight: '500', lineHeight: '1.5',
+                                fontFamily: '"Nanum Myeongjo", serif', letterSpacing: '0px', wordSpacing: '0px', margin: 0, border: 'none',
+                                caretColor: 'transparent', boxSizing: 'border-box',
+                                padding: '20px 45px 20px 22px',
+                                whiteSpace: 'pre-wrap', wordBreak: 'keep-all',
+                                resize: 'none', overflow: 'hidden'
                               }}
                               placeholder=""
+                              rows={2}
                             />
                             {isTranscribed && (
                               <div style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', zIndex: 2, pointerEvents: 'none' }}>
@@ -2579,8 +2858,9 @@ export default function App() {
                                 if (!isTranscribed) return;
                                 const newRecord = {
                                   id: Date.now().toString(),
+                                  timestamp: Date.now(),
                                   date: new Date().toLocaleDateString(),
-                                  trackType: '비밀의 방앗간',
+                                  trackType: '모닝 확언',
                                   text: affirmation,
                                 };
                                 setEmotionDB(db => {
@@ -3361,9 +3641,9 @@ export default function App() {
                               qNormal = '';
                               qBold = aiResult.question;
                             }
-                            if (aiResult && Array.isArray(aiResult.emotions) && aiResult.emotions.length > 0) {
+                            if (aiResult && Array.isArray(aiResult.chips) && aiResult.chips.length > 0) {
                               // API가 반환한 감정 8개를 동적 칩으로 설정
-                              dChips = aiResult.emotions.slice(0, 8);
+                              dChips = aiResult.chips.slice(0, 8);
                             }
                           } catch (err) {
                             // API 실패(429 등) 시 키워드 기반 꼬리 질문 + 넓은 범위 폴백 칩
@@ -3537,6 +3817,7 @@ export default function App() {
                       setStep(formData?.name ? 'concern' : 'info');
                       window.scrollTo(0, 0);
                     }}
+                    executeWithAuth={executeWithAuth}
                   />
                 )}
 
@@ -3589,7 +3870,7 @@ export default function App() {
                           {(() => {
                         let foundFirstKeySentence = false;
                         return getHolisticReportPoints().map((point, index) => (
-                          <div key={index} ref={el => accordionRefs.current[index] = el} style={{ ...styles.keyPointItem, borderBottom: index === 2 ? 'none' : '1px solid #F0E6D2' }} onClick={() => setOpenIndex(index === openIndex ? -1 : index)}>
+                          <div key={index} ref={el => accordionRefs.current[index] = el} style={{ ...styles.keyPointItem, borderBottom: index === 3 ? 'none' : '1px solid #F0E6D2' }} onClick={() => setOpenIndex(index === openIndex ? -1 : index)}>
                             <div style={styles.keyTitleRow}>
                               <span style={{ ...styles.keyTitle, color: openIndex === index ? '#E2725B' : '#4A4A4A' }}>
                                 {point.title}
@@ -3599,7 +3880,7 @@ export default function App() {
                               </svg>
                             </div>
                             {openIndex === index && (
-                              <div className="dynamic-fade-layer" style={{ marginTop: '12px', backgroundColor: index === 2 ? '#FFF5F2' : '#FAF9F6', padding: '22px', borderRadius: '12px', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.01)', border: index === 2 ? '1px dashed #F1AC9D' : 'none' }}>
+                              <div className="dynamic-fade-layer" style={{ marginTop: '12px', backgroundColor: '#FAF9F6', padding: '22px', borderRadius: '12px', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.01)', border: 'none' }}>
                                 {point.desc.split('\n\n').map((paragraph, i) => (
                                   <p key={i} style={{ fontSize: '0.98rem', color: '#666', lineHeight: '1.85', margin: 0, marginBottom: i !== point.desc.split('\n\n').length - 1 ? '18px' : 0 }}>
                                     {paragraph.split('**').map((part, j) => {
@@ -3629,6 +3910,7 @@ export default function App() {
 
                                                   const newRecord = {
                                                     id: Date.now().toString() + Math.random(),
+                                                    timestamp: Date.now(),
                                                     date: new Date().toLocaleDateString(),
                                                     trackType: trackType,
                                                     ilgan: calculateIlgan(formData.year, formData.month, formData.day).name,
@@ -3671,7 +3953,7 @@ export default function App() {
                                     <MinimalMindMap coords={
                                       (aiSections && aiSections.coordinate && typeof aiSections.coordinate === 'object' && typeof aiSections.coordinate.x === 'number')
                                         ? { x: aiSections.coordinate.x, y: aiSections.coordinate.y }
-                                        : calculateCoordinates(formData)
+                                        : calculateCoordinates(formData, `${currentConcernData.text || ''} ${(currentConcernData.emotions || []).join(' ')}`)
                                     } />
                                   </div>
                                 )}
@@ -3757,7 +4039,7 @@ export default function App() {
             </div>
           </div>
         </div>
-        <footer style={{ ...styles.footer, fontSize: '0.65rem', opacity: 0.5, marginTop: '40px' }}>© 2026 H.E.R.e Holistic Emotion Journey / Designed by Developer Antigravity, Fully Handcrafted Component.</footer>
+
 
         {showHug && <div className="screen-hug-ripple" />}
 
@@ -3806,7 +4088,7 @@ export default function App() {
 
         {/* Syncing Overlay */}
         {isSyncing && (
-          <div className="dynamic-fade-layer" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(253, 251, 247, 0.95)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="dynamic-fade-layer" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(253, 251, 247, 0.95)', zIndex: 10050, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ width: '40px', height: '40px', border: '3px solid #FDF2F0', borderTopColor: '#E2725B', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '20px' }} />
             <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
             <p style={{ color: '#E2725B', fontSize: '1.1rem', fontWeight: 'bold', animation: 'subtlePulse 2s infinite' }}>당신의 진심을 완벽하게 암호화 중입니다...</p>
@@ -3814,7 +4096,7 @@ export default function App() {
         )}
 
         {toastMsg && (
-          <div className="dynamic-fade-layer" style={{ position: 'fixed', bottom: '40px', left: '50%', transform: 'translateX(-50%)', backgroundColor: 'rgba(50, 50, 50, 0.95)', color: 'white', padding: '16px 24px', borderRadius: '30px', fontSize: '1rem', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', zIndex: 10001, transition: 'opacity 0.4s ease', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+          <div className="dynamic-fade-layer" style={{ position: 'fixed', bottom: '40px', left: '50%', transform: 'translateX(-50%)', backgroundColor: 'rgba(50, 50, 50, 0.95)', color: 'white', padding: '16px 24px', borderRadius: '30px', fontSize: '1rem', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', zIndex: 10001, transition: 'opacity 0.4s ease', whiteSpace: 'pre-wrap', maxWidth: '90vw', textAlign: 'center', wordBreak: 'keep-all', pointerEvents: 'none' }}>
             {toastMsg}
           </div>
         )}
@@ -3947,6 +4229,139 @@ export default function App() {
           </>
         );
       })()}
+
+      {/* Email Auth Modal */}
+      {showAuthModal && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowAuthModal(false); setAuthError(''); } }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 99999, padding: '20px', boxSizing: 'border-box',
+          }}
+        >
+          <div style={{
+            width: '100%', maxWidth: '400px', backgroundColor: '#FDFBF7',
+            borderRadius: '24px', padding: '32px 28px', boxShadow: '0 24px 60px rgba(0,0,0,0.15)',
+            boxSizing: 'border-box',
+          }}>
+            {/* 헤더 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#3A2E2A', fontWeight: '800' }}>
+                {authMode === 'register' ? '🌱 새로운 계정 만들기' : '🔑 로그인하기'}
+              </h2>
+              <button
+                onClick={() => { setShowAuthModal(false); setAuthError(''); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 기존 기록 유지 안내 (익명 유저인 경우) */}
+            {userSession?.isAnonymous && (
+              <div style={{
+                padding: '12px 16px', backgroundColor: '#FDF2F0', borderRadius: '12px',
+                marginBottom: '20px', fontSize: '0.85rem', color: '#C2604A', lineHeight: '1.5',
+                border: '1px solid #F5C4BB',
+              }}>
+                ✅ 지금까지 쌓인 <strong>감정 기록이 그대로 유지</strong>됩니다.<br />
+                계정을 만들면 안전하게 클라우드에 보관할 수 있어요.
+              </div>
+            )}
+
+            <form onSubmit={handleEmailAuth} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <input
+                type="email"
+                placeholder="이메일 주소"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                autoComplete="email"
+                style={{
+                  width: '100%', padding: '14px 16px', borderRadius: '12px',
+                  border: '1.5px solid #E5E0DA', fontSize: '0.95rem',
+                  backgroundColor: 'white', outline: 'none', boxSizing: 'border-box',
+                  fontFamily: 'inherit', color: '#3A2E2A',
+                  transition: 'border-color 0.2s',
+                }}
+              />
+              <input
+                type="password"
+                placeholder="비밀번호 (6자 이상)"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
+                style={{
+                  width: '100%', padding: '14px 16px', borderRadius: '12px',
+                  border: '1.5px solid #E5E0DA', fontSize: '0.95rem',
+                  backgroundColor: 'white', outline: 'none', boxSizing: 'border-box',
+                  fontFamily: 'inherit', color: '#3A2E2A',
+                }}
+              />
+
+              {authError && (
+                <div style={{ fontSize: '0.85rem', color: '#D05A42', padding: '10px 14px', backgroundColor: '#FDF2F0', borderRadius: '10px', border: '1px solid #F5C4BB' }}>
+                  ⚠️ {authError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                style={{
+                  width: '100%', padding: '16px', borderRadius: '14px', border: 'none',
+                  backgroundColor: '#E2725B', color: 'white', fontSize: '1rem', fontWeight: '700',
+                  cursor: 'pointer', transition: 'opacity 0.2s', marginTop: '4px',
+                }}
+              >
+                {authMode === 'register' ? '계정 만들기 & 기록 연결' : '로그인'}
+              </button>
+            </form>
+
+            {/* 구글 로그인 구분선 */}
+            <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', gap: '12px' }}>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#E5E0DA' }} />
+              <span style={{ fontSize: '0.8rem', color: '#A0968E' }}>또는</span>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#E5E0DA' }} />
+            </div>
+
+            <button
+              onClick={() => { setShowAuthModal(false); handleCloudLogin(); }}
+              style={{
+                width: '100%', padding: '14px 16px', borderRadius: '14px',
+                border: '1.5px solid #E5E0DA', backgroundColor: 'white',
+                color: '#4A4A4A', fontSize: '0.95rem', fontWeight: '600',
+                cursor: 'pointer', display: 'flex', justifyContent: 'center',
+                alignItems: 'center', gap: '10px',
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+              Google 계정으로 계속하기
+            </button>
+
+            {/* 로그인 ↔ 회원가입 전환 */}
+            <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.88rem', color: '#A0968E' }}>
+              {authMode === 'register' ? (
+                <>이미 계정이 있으신가요?{' '}
+                  <span
+                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                    style={{ color: '#E2725B', fontWeight: '700', cursor: 'pointer' }}
+                  >로그인</span>
+                </>
+              ) : (
+                <>아직 계정이 없으신가요?{' '}
+                  <span
+                    onClick={() => { setAuthMode('register'); setAuthError(''); }}
+                    style={{ color: '#E2725B', fontWeight: '700', cursor: 'pointer' }}
+                  >회원가입</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -4153,7 +4568,7 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
 }
 
 // H.E.R.e 다정한 식탁 (가족의 방) 결과 뷰 컴포넌트 - 5단계 전면 개편안
-function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAction, selectedEmotions = [], defenseStyle, coreNeed, trackType, formData, onReset, onGoToMyRoom }) {
+function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAction, selectedEmotions = [], defenseStyle, coreNeed, trackType, formData, onReset, onGoToMyRoom, executeWithAuth }) {
   const [analysisData, setAnalysisData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showSharePreview, setShowSharePreview] = useState(false);
@@ -4419,21 +4834,21 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
               <div style={{ backgroundColor: '#FFF5F0', borderRadius: '24px', padding: '36px 28px', border: '1px solid #FDE8E0', boxShadow: '0 8px 30px rgba(226,114,91,0.08)' }}>
                 <h3 style={{ fontSize: '1.2rem', color: '#E2725B', fontWeight: '800', margin: '0 0 20px 0', textAlign: 'center' }}>💌 다정한 대화 처방전</h3>
 
-                <p style={{ fontSize: '1.0rem', color: '#555', lineHeight: '1.8', margin: '0 0 24px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center' }}>
-                  {mockData.relationship_dynamics || mockData.mind_prescription}
+                <p style={{ fontSize: '1.0rem', color: '#555', lineHeight: '1.8', margin: '0 0 24px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center', whiteSpace: 'pre-wrap' }}>
+                  {mockData.relationship_dynamics || (typeof mockData.mind_prescription === 'string' ? mockData.mind_prescription : `${mockData.mind_prescription?.partner_understanding || ''}\n\n${mockData.mind_prescription?.my_boundary || ''}`)}
                 </p>
 
                 {/* 스크립트 강조 블록 */}
                 <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', padding: '28px 22px', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', marginBottom: '24px', position: 'relative' }}>
                   <div style={{ fontSize: '1.5rem', color: '#E2725B', lineHeight: '1', marginBottom: '8px', opacity: 0.6 }}>❝</div>
                   <p style={{ fontSize: '1.15rem', color: '#333', fontWeight: 'bold', lineHeight: '1.6', margin: '0 0 8px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center' }}>
-                    {mockData.transcription_sentence || mockData.share_main_sentence}
+                    {mockData.transcription_sentence || mockData.share_main_sentence || (typeof mockData.mind_prescription === 'object' ? mockData.mind_prescription?.bridge_action : '')}
                   </p>
                   <div style={{ fontSize: '1.5rem', color: '#E2725B', lineHeight: '1', textAlign: 'right', opacity: 0.6 }}>❞</div>
                 </div>
 
                 <p style={{ fontSize: '0.95rem', color: '#666', lineHeight: '1.75', margin: '0 0 30px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center' }}>
-                  {mockData.prescription?.content || mockData.share_sub_sentence}
+                  {mockData.prescription?.content || mockData.share_sub_sentence || ''}
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -4489,11 +4904,13 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,1) 100%)', zIndex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: '10px' }}>
                         <button
                           onClick={() => {
-                            setIsUnlocking(true);
-                            setTimeout(() => {
-                              setIsUnlocking(false);
-                              setIsPremiumUnlocked(true);
-                            }, 1000);
+                            executeWithAuth(() => {
+                              setIsUnlocking(true);
+                              setTimeout(() => {
+                                setIsUnlocking(false);
+                                setIsPremiumUnlocked(true);
+                              }, 1000);
+                            });
                           }}
                           disabled={isUnlocking}
                           style={{ backgroundColor: '#1A2A4E', color: '#FFF', border: 'none', borderRadius: '12px', padding: '16px 24px', fontSize: '1.05rem', fontWeight: 'bold', cursor: isUnlocking ? 'default' : 'pointer', transition: 'all 0.2s', boxShadow: '0 8px 24px rgba(26,42,78,0.3)', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 2, opacity: isUnlocking ? 0.8 : 1 }}
@@ -4998,5 +5415,7 @@ function FamilyConcernInputView({ partnerName, trackType, onNext, currentConcern
         </div>
       </div>
     </div>
+
   );
 }
+
