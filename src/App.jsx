@@ -2508,6 +2508,22 @@ export default function App() {
                 const _elementLines = _pvLinesBank[_pvIlgan.element] || _pvLinesBank[0];
                 const _morningPreview = _elementLines[_todayIdx % _elementLines.length];
 
+                // ── 연속 이용일수(Streak) 계산 로직 ──
+                const calculateStreak = (db) => {
+                  if (!db || db.length === 0) return 0;
+                  // Get unique days (at 00:00:00) sorted descending
+                  const uniqueDays = [...new Set(db.map(r => new Date(r.timestamp).setHours(0,0,0,0)))].sort((a,b) => b - a);
+                  let streak = 1;
+                  for (let i = 1; i < uniqueDays.length; i++) {
+                    if ((uniqueDays[i-1] - uniqueDays[i]) === 86400000) streak++;
+                    else break;
+                  }
+                  // If the most recent record is older than yesterday, streak is broken
+                  const today = new Date().setHours(0,0,0,0);
+                  if (today - uniqueDays[0] > 86400000) return 0;
+                  return streak;
+                };
+
                 let baseBannerConfig;
                 
                 if (!isLoggedInUser) {
@@ -2522,20 +2538,35 @@ export default function App() {
                     }
                   };
                 } else {
-                  baseBannerConfig = isMorning
-                    ? { theme: 'light', Icon: SvgMorning, label: 'TODAY\'S GREETING',
-                        title: `오늘 ${userNameDisplay} 님을 위한\n따뜻한 안부`,
-                        sub: `${userMbtiTrait.name} 성향을 가진 ${userNameDisplay} 님의 오늘 하루를 살며시 들여다볼게요.`,
-                        preview: _morningPreview, gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)', onClick: () => { setIsEnteringRoom(true); setTimeout(() => { setStep('morning_letter'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } }
-                    : isDay
-                      ? { theme: 'light', Icon: SvgForecast, label: 'DAILY FORECAST',
-                          title: `오늘 ${userNameDisplay} 님을 위한\n마음 날씨 이야기`,
-                          sub: `${userMbtiTrait.name} 성향을 가진 ${userNameDisplay} 님의 오늘 마음을 가만히 그려볼게요.`,
-                          gradient: 'linear-gradient(135deg, #F4F9F4 0%, #E8F4F8 50%, #EBF0F5 100%)', onClick: () => { setIsEnteringRoom(true); setTimeout(() => { setStep('daily_forecast'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } }
-                      : { theme: 'light', Icon: SvgDinner, label: 'EVENING TABLE',
-                          title: `오늘 저녁,\n${userNameDisplay} 님의 식탁 위에 놓인\n마음의 짐을 함께\n내려놓아 볼까요?`,
-                          sub: `${userNameDisplay} 님의 저녁, 가족과 나누는 다정한 이야기를 함께 펼쳐봐요.`,
-                          gradient: 'linear-gradient(135deg, #FDF4E3 0%, #FCE8D5 50%, #F5EAE1 100%)', onClick: () => { setTrackType('다정한 식탁'); setIsEnteringRoom(true); setTimeout(() => { setStep('partner_info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); } };
+                  // 로그인 유저: 개인화된 "마음 날씨" 동적 배너
+                  const streak = calculateStreak(emotionDB);
+                  const todayStr = new Date().toLocaleDateString();
+                  const hasReadToday = localStorage.getItem('hasReadMorningLetter_' + todayStr) === 'true';
+                  
+                  const briefing = buildBriefing(emotionDB, formData.name);
+
+                  // 중복되는 '하늘' 단어를 제거하여 자연스러운 헤드라인으로 재구성
+                  let naturalHeadline = briefing.headline
+                    .replace(`${userNameDisplay} 님, `, `${userNameDisplay} 님의 하늘은,\n`)
+                    .replace('서서히 하늘이 열리고 있어요.', '서서히 열리고 있어요.')
+                    .replace('오늘 하늘엔 틈새 햇살이 들어오고 있어요.', '틈새 햇살이 들어오고 있어요.')
+                    .replace('오늘의 하늘이 기다리고 있어요.', '아직 맑아지기를 기다리고 있어요.');
+
+                  baseBannerConfig = {
+                    isPersonalized: true,
+                    emoji: briefing.emoji,
+                    label: '오늘의 하늘',
+                    streak: streak,
+                    headline: naturalHeadline,
+                    sub: '오늘 아침, 그 결을 편지에 담아뒀어요.',
+                    gradient: 'linear-gradient(135deg, #F4F9F4 0%, #E8F4F8 50%, #EBF0F5 100%)',
+                    hasRead: hasReadToday,
+                    onClick: () => { 
+                      localStorage.setItem('hasReadMorningLetter_' + todayStr, 'true');
+                      setIsEnteringRoom(true); 
+                      setTimeout(() => { setStep('morning_letter'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); 
+                    }
+                  };
                 }
 
                 // ── [Proactive] 선제적 예보가 감지된 경우 배너 덮어쓰기 ──
@@ -2586,24 +2617,68 @@ export default function App() {
                       <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: isLight ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.03)', pointerEvents: 'none' }} />
                       <div style={{ position: 'absolute', bottom: '-30px', left: '40%', width: '120px', height: '120px', borderRadius: '50%', background: isLight ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.025)', pointerEvents: 'none' }} />
                       <div style={{ position: 'relative', zIndex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                          <bannerConfig.Icon color={cLabel} />
-                          <span style={{ fontSize: '0.68rem', color: cLabel, letterSpacing: '2.5px', fontWeight: '800' }}>{bannerConfig.label}</span>
-                        </div>
-                        <h2 style={{ fontSize: '1.45rem', color: cTitle, fontWeight: '800', margin: '0 0 10px 0', lineHeight: '1.4', whiteSpace: 'pre-line', wordBreak: 'keep-all', letterSpacing: '-0.3px' }}>
-                          {bannerConfig.title}
-                        </h2>
-                        <p style={{ fontSize: '0.82rem', color: cSub, margin: '0 0 12px 0', lineHeight: '1.6', wordBreak: 'keep-all', fontWeight: isLight ? '500' : '400' }}>{bannerConfig.sub}</p>
-                        {bannerConfig.preview && (
-                          <div style={{ margin: '0 0 18px 0', padding: '16px 24px', backgroundColor: cPreviewBg, borderRadius: '10px', borderLeft: `3px solid ${cPreviewBorder}` }}>
-                            <span style={{ fontSize: '0.65rem', color: cPreviewLabel, letterSpacing: '1.5px', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>오늘 그대에게 전하고 싶은 말</span>
-                            <span style={{ fontSize: '0.85rem', color: cPreviewText, fontStyle: 'italic', lineHeight: '1.6', fontFamily: '"Nanum Myeongjo", serif', fontWeight: isLight ? '600' : '400' }}>{bannerConfig.preview}</span>
-                          </div>
+                        {bannerConfig.isPersonalized ? (
+                          <>
+                            {/* 1행: 아이콘 + 라벨 + 배지 */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '1.2rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))', animation: 'floatIcon 4s ease-in-out infinite' }}>
+                                  {bannerConfig.emoji}
+                                </span>
+                                <span style={{ fontSize: '0.68rem', color: cLabel, letterSpacing: '2.5px', fontWeight: '800' }}>
+                                  {bannerConfig.label}
+                                </span>
+                              </div>
+                              {bannerConfig.streak > 0 && (
+                                <div style={{ backgroundColor: 'rgba(255,255,255,0.5)', padding: '4px 10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                                  <span style={{ fontSize: '0.75rem' }}>🔥</span>
+                                  <span style={{ fontSize: '0.65rem', color: cTitle, fontWeight: '700' }}>{bannerConfig.streak}일째</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* 2행: 헤드라인 */}
+                            <h2 style={{ fontSize: '1.45rem', color: cTitle, fontWeight: '800', margin: '0 0 10px 0', lineHeight: '1.4', whiteSpace: 'pre-line', wordBreak: 'keep-all', letterSpacing: '-0.3px' }}>
+                              {bannerConfig.headline}
+                            </h2>
+                            
+                            {/* 3행: 서브텍스트 */}
+                            <p style={{ fontSize: '0.82rem', color: cSub, margin: '0 0 18px 0', lineHeight: '1.6', wordBreak: 'keep-all', fontWeight: isLight ? '500' : '400' }}>
+                              {bannerConfig.sub}
+                            </p>
+                            
+                            {/* 4행: CTA 버튼 */}
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 24px', borderRadius: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                              <span style={{ color: cAction, fontSize: '0.82rem', fontWeight: '800', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                {bannerConfig.hasRead ? '다시 읽기' : (
+                                  <>편지 열어보기<div style={{ width: '5px', height: '5px', backgroundColor: '#E2725B', borderRadius: '50%', marginBottom: '8px' }} /></>
+                                )}
+                              </span>
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke={cAction} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                              <bannerConfig.Icon color={cLabel} />
+                              <span style={{ fontSize: '0.68rem', color: cLabel, letterSpacing: '2.5px', fontWeight: '800' }}>{bannerConfig.label}</span>
+                            </div>
+                            <h2 style={{ fontSize: '1.45rem', color: cTitle, fontWeight: '800', margin: '0 0 10px 0', lineHeight: '1.4', whiteSpace: 'pre-line', wordBreak: 'keep-all', letterSpacing: '-0.3px' }}>
+                              {bannerConfig.title}
+                            </h2>
+                            <p style={{ fontSize: '0.82rem', color: cSub, margin: '0 0 12px 0', lineHeight: '1.6', wordBreak: 'keep-all', fontWeight: isLight ? '500' : '400' }}>{bannerConfig.sub}</p>
+                            {bannerConfig.preview && (
+                              <div style={{ margin: '0 0 18px 0', padding: '16px 24px', backgroundColor: cPreviewBg, borderRadius: '10px', borderLeft: `3px solid ${cPreviewBorder}` }}>
+                                <span style={{ fontSize: '0.65rem', color: cPreviewLabel, letterSpacing: '1.5px', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>오늘 그대에게 전하고 싶은 말</span>
+                                <span style={{ fontSize: '0.85rem', color: cPreviewText, fontStyle: 'italic', lineHeight: '1.6', fontFamily: '"Nanum Myeongjo", serif', fontWeight: isLight ? '600' : '400' }}>{bannerConfig.preview}</span>
+                              </div>
+                            )}
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 24px', borderRadius: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                              <span style={{ color: cAction, fontSize: '0.82rem', fontWeight: '800', letterSpacing: '0.5px' }}>열어보기</span>
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke={cAction} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            </div>
+                          </>
                         )}
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 24px', borderRadius: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                          <span style={{ color: cAction, fontSize: '0.82rem', fontWeight: '800', letterSpacing: '0.5px' }}>열어보기</span>
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke={cAction} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                        </div>
                       </div>
                     </div>
 
