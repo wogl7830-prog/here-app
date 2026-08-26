@@ -442,14 +442,14 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                       position: 'relative',
                       backgroundColor: c.cardBg || '#FFFFFF', borderRadius: '16px', padding: '16px 14px',
                       border: '1px solid #EAE0D8', borderLeft: `3px solid ${c.highlightColor || '#EAE0D8'}`, cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', gap: '14px',
+                      display: 'flex', alignItems: 'flex-start', gap: '14px',
                       transition: 'background-color 0.2s ease, transform 0.2s ease',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.06)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)'; }}
                   >
-                    <div style={{ width: '52px', height: '52px', backgroundColor: '#FFFFFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${c.highlightColor || c.color}` }}>
+                    <div style={{ width: '52px', height: '52px', backgroundColor: '#FFFFFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${c.highlightColor || c.color}`, marginTop: '2px' }}>
                       {c.icon}
                     </div>
 
@@ -483,11 +483,11 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                     position: 'relative',
                     backgroundColor: '#F1EFE8', borderRadius: '16px', padding: '14px 16px',
                     border: '1px solid #EAE0D8', borderLeft: '3px solid rgba(196, 192, 182, 0.65)',
-                    display: 'flex', alignItems: 'center', gap: '14px',
+                    display: 'flex', alignItems: 'flex-start', gap: '14px',
                     opacity: 0.7, cursor: 'not-allowed'
                   }}
                 >
-                  <div style={{ width: '46px', height: '46px', backgroundColor: '#FFFFFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid #C4C0B6' }}>
+                  <div style={{ width: '46px', height: '46px', backgroundColor: '#FFFFFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid #C4C0B6', marginTop: '2px' }}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A3A3A3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                     </svg>
