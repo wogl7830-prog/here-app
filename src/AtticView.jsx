@@ -7,7 +7,7 @@ const COUNSELORS = [
     id: 'inner',
     name: '나의 마음 상담사',
     tag: '개인 심리 케어',
-    icon: '👤',
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B85C4A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
     color: '#FF8A75',
     badgeColor: '#FF8A75',
     bgColor: 'rgba(255, 138, 117, 0.18)',
@@ -20,7 +20,7 @@ const COUNSELORS = [
     id: 'family',
     name: '가족 코치',
     tag: '가족/양육 코칭',
-    icon: '🏡',
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7A5C48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
     color: '#FBBF24',
     badgeColor: '#FBBF24',
     bgColor: 'rgba(251, 191, 36, 0.18)',
@@ -33,7 +33,7 @@ const COUNSELORS = [
     id: 'relation',
     name: '관계 & 부부 멘토',
     tag: '대인관계/부부 케어',
-    icon: '🤝',
+    icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2E5B7A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a2.12 2.12 0 1 0 3-3L15 9l-1.25-1.25a2 2 0 0 0-2.83 0l-3.5 3.5a2 2 0 0 0 0 2.83L11 17"/><path d="m4.84 15.58-.84-.84a2 2 0 0 1 0-2.83L7 9l2.75 2.75L11 14"/><path d="m12.5 7.5 4-4a2 2 0 0 1 2.83 2.83l-4 4"/><path d="M11 11 8.5 8.5a2.12 2.12 0 1 0-3 3L8 14"/></svg>,
     color: '#A5B4FC',
     badgeColor: '#A5B4FC',
     bgColor: 'rgba(165, 180, 252, 0.18)',
@@ -449,22 +449,23 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                     onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.06)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.02)'; }}
                   >
-                    <div style={{ position: 'absolute', top: '16px', right: '16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: c.highlightColor || '#4CAF50' }} />
-                      <span style={{ fontSize: '0.7rem', color: c.highlightColor || '#4CAF50', fontWeight: 'bold' }}>대화 가능</span>
-                    </div>
-
-                    <div style={{ width: '52px', height: '52px', backgroundColor: '#FFFFFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', flexShrink: 0, border: `1px solid ${c.highlightColor || c.color}` }}>
+                    <div style={{ width: '52px', height: '52px', backgroundColor: '#FFFFFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${c.highlightColor || c.color}` }}>
                       {c.icon}
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, paddingRight: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '1.05rem', fontWeight: '700', color: '#3A2E2A', letterSpacing: '-0.3px' }}>{c.name}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '1.05rem', fontWeight: '700', color: '#3A2E2A', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: c.highlightColor || '#4CAF50' }} />
+                          <span style={{ fontSize: '0.7rem', color: c.highlightColor || '#4CAF50', fontWeight: 'bold' }}>대화 가능</span>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: '6px' }}>
                         <span style={{
                           fontSize: '0.7rem', color: c.highlightColor || c.badgeColor || c.color, backgroundColor: 'transparent',
                           border: `1px solid ${c.highlightColor || c.borderColor || c.color}`, padding: '2px 8px', borderRadius: '12px',
-                          fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0
+                          fontWeight: '600', display: 'inline-block'
                         }}>
                           {c.tag}
                         </span>
@@ -486,21 +487,24 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                     opacity: 0.7, cursor: 'not-allowed'
                   }}
                 >
-                  <div style={{ position: 'absolute', top: '14px', right: '14px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ fontSize: '0.65rem', color: '#999', fontWeight: 'bold' }}>🚧 준비 중</span>
+                  <div style={{ width: '46px', height: '46px', backgroundColor: '#FFFFFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid #C4C0B6' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A3A3A3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
                   </div>
 
-                  <div style={{ width: '46px', height: '46px', backgroundColor: '#FFFFFF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem', flexShrink: 0, border: '1px solid #C4C0B6' }}>
-                    🔒
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, paddingRight: '45px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#999', letterSpacing: '-0.3px' }}>오피스 멘토</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#999', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>오피스 멘토</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                        <span style={{ fontSize: '0.65rem', color: '#999', fontWeight: 'bold' }}>🚧 준비 중</span>
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '6px' }}>
                       <span style={{
                         fontSize: '0.65rem', color: '#999', backgroundColor: 'transparent',
                         border: '1px solid #C4C0B6', padding: '2px 6px', borderRadius: '10px',
-                        fontWeight: '700', whiteSpace: 'nowrap', flexShrink: 0
+                        fontWeight: '700', display: 'inline-block'
                       }}>
                         직장/사회생활
                       </span>
