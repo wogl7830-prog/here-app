@@ -433,14 +433,14 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
               </div>
 
               {/* 마음 메이트 프로필 목록 */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
                 {COUNSELORS.map((c) => (
                   <div
                     key={c.id}
                     onClick={() => handleSelectCounselor(c)}
                     style={{
                       position: 'relative',
-                      backgroundColor: c.cardBg || '#FFFFFF', borderRadius: '16px', padding: '16px 14px',
+                      backgroundColor: c.cardBg || '#FFFFFF', borderRadius: '16px', padding: '12px 14px',
                       border: '1px solid #EAE0D8', borderLeft: `3px solid ${c.highlightColor || '#EAE0D8'}`, cursor: 'pointer',
                       display: 'flex', alignItems: 'flex-start', gap: '14px',
                       transition: 'background-color 0.2s ease, transform 0.2s ease',
@@ -454,14 +454,14 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                         <span style={{ fontSize: '1.05rem', fontWeight: '700', color: '#3A2E2A', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                           <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: c.highlightColor || '#4CAF50' }} />
                           <span style={{ fontSize: '0.7rem', color: c.highlightColor || '#4CAF50', fontWeight: 'bold' }}>대화 가능</span>
                         </div>
                       </div>
-                      <div style={{ marginBottom: '6px' }}>
+                      <div style={{ marginBottom: '3px' }}>
                         <span style={{
                           fontSize: '0.7rem', color: c.highlightColor || c.badgeColor || c.color, backgroundColor: 'transparent',
                           border: `1px solid ${c.highlightColor || c.borderColor || c.color}`, padding: '2px 8px', borderRadius: '12px',
@@ -481,7 +481,7 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                 <div
                   style={{
                     position: 'relative',
-                    backgroundColor: '#F1EFE8', borderRadius: '16px', padding: '14px 16px',
+                    backgroundColor: '#F1EFE8', borderRadius: '16px', padding: '10px 16px',
                     border: '1px solid #EAE0D8', borderLeft: '3px solid rgba(196, 192, 182, 0.65)',
                     display: 'flex', alignItems: 'flex-start', gap: '14px',
                     opacity: 0.7, cursor: 'not-allowed'
@@ -494,13 +494,13 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                       <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#999', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>오피스 멘토</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                         <span style={{ fontSize: '0.65rem', color: '#999', fontWeight: 'bold' }}>🚧 준비 중</span>
                       </div>
                     </div>
-                    <div style={{ marginBottom: '6px' }}>
+                    <div style={{ marginBottom: '3px' }}>
                       <span style={{
                         fontSize: '0.65rem', color: '#999', backgroundColor: 'transparent',
                         border: '1px solid #C4C0B6', padding: '2px 6px', borderRadius: '10px',
