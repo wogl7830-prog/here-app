@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import {
   loginWithGoogle,
   loginWithEmail,
@@ -2514,7 +2514,9 @@ export default function App() {
                     .replace(namePrefix, namePrefix ? `${formData.name} 님의 하늘은,\n` : '')
                     .replace('서서히 하늘이 열리고 있어요.', '서서히 열리고 있어요.')
                     .replace('오늘 하늘엔 틈새 햇살이 들어오고 있어요.', '틈새 햇살이 들어오고 있어요.')
-                    .replace('오늘의 하늘이 기다리고 있어요.', '아직 맑아지기를 기다리고 있어요.');
+                    // 이름이 있을 때만 적용: "이름 님의 하늘은,\n오늘의 하늘이 기다리고 있어요." → "아직 맑아지기를..."
+                    // 이름이 없을 때는 buildBriefing 원문("오늘의 하늘이 기다리고 있어요.")을 그대로 사용
+                    .replace(namePrefix ? '오늘의 하늘이 기다리고 있어요.' : '__SKIP__', '아직 맑아지기를 기다리고 있어요.');
 
                   if (!isLoggedInUser) {
                     baseBannerConfig = {
