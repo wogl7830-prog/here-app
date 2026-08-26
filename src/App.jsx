@@ -2554,12 +2554,13 @@ export default function App() {
 
                   baseBannerConfig = {
                     isPersonalized: true,
+                    theme: 'light',
                     emoji: briefing.emoji,
                     label: '오늘의 하늘',
                     streak: streak,
                     headline: naturalHeadline,
                     sub: '오늘 아침, 그 결을 편지에 담아뒀어요.',
-                    gradient: 'linear-gradient(135deg, #F4F9F4 0%, #E8F4F8 50%, #EBF0F5 100%)',
+                    gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)',
                     hasRead: hasReadToday,
                     onClick: () => { 
                       localStorage.setItem('hasReadMorningLetter_' + todayStr, 'true');
@@ -2619,42 +2620,42 @@ export default function App() {
                       <div style={{ position: 'relative', zIndex: 1 }}>
                         {bannerConfig.isPersonalized ? (
                           <>
-                            {/* 1행: 아이콘 + 라벨 + 배지 */}
+                            {/* 1행: 아이콘 + 라벨 + 배지 — 고정 코랄 팔레트 */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '1.2rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))', animation: 'floatIcon 4s ease-in-out infinite' }}>
                                   {bannerConfig.emoji}
                                 </span>
-                                <span style={{ fontSize: '0.68rem', color: cLabel, letterSpacing: '2.5px', fontWeight: '800' }}>
+                                <span style={{ fontSize: '0.68rem', color: '#993C1D', letterSpacing: '2.5px', fontWeight: '800' }}>
                                   {bannerConfig.label}
                                 </span>
                               </div>
                               {bannerConfig.streak > 0 && (
-                                <div style={{ backgroundColor: 'rgba(255,255,255,0.5)', padding: '4px 10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
+                                <div style={{ backgroundColor: '#FFFFFF', padding: '4px 10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
                                   <span style={{ fontSize: '0.75rem' }}>🔥</span>
-                                  <span style={{ fontSize: '0.65rem', color: cTitle, fontWeight: '700' }}>{bannerConfig.streak}일째</span>
+                                  <span style={{ fontSize: '0.65rem', color: '#712B13', fontWeight: '700' }}>{bannerConfig.streak}일째</span>
                                 </div>
                               )}
                             </div>
                             
                             {/* 2행: 헤드라인 */}
-                            <h2 style={{ fontSize: '1.45rem', color: cTitle, fontWeight: '800', margin: '0 0 10px 0', lineHeight: '1.4', whiteSpace: 'pre-line', wordBreak: 'keep-all', letterSpacing: '-0.3px' }}>
+                            <h2 style={{ fontSize: '1.45rem', color: '#4A3728', fontWeight: '800', margin: '0 0 10px 0', lineHeight: '1.4', whiteSpace: 'pre-line', wordBreak: 'keep-all', letterSpacing: '-0.3px' }}>
                               {bannerConfig.headline}
                             </h2>
                             
                             {/* 3행: 서브텍스트 */}
-                            <p style={{ fontSize: '0.82rem', color: cSub, margin: '0 0 18px 0', lineHeight: '1.6', wordBreak: 'keep-all', fontWeight: isLight ? '500' : '400' }}>
+                            <p style={{ fontSize: '0.82rem', color: '#7A6B63', margin: '0 0 18px 0', lineHeight: '1.6', wordBreak: 'keep-all', fontWeight: '500' }}>
                               {bannerConfig.sub}
                             </p>
                             
                             {/* 4행: CTA 버튼 */}
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 24px', borderRadius: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                              <span style={{ color: cAction, fontSize: '0.82rem', fontWeight: '800', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 24px', borderRadius: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                              <span style={{ color: '#D85A30', fontSize: '0.82rem', fontWeight: '800', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 {bannerConfig.hasRead ? '다시 읽기' : (
-                                  <>편지 열어보기<div style={{ width: '5px', height: '5px', backgroundColor: '#E2725B', borderRadius: '50%', marginBottom: '8px' }} /></>
+                                  <>편지 열어보기<div style={{ width: '5px', height: '5px', backgroundColor: '#D85A30', borderRadius: '50%', marginBottom: '8px' }} /></>
                                 )}
                               </span>
-                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke={cAction} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7H11M11 7L7.5 3.5M11 7L7.5 10.5" stroke="#D85A30" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                             </div>
                           </>
                         ) : (
@@ -2761,7 +2762,8 @@ export default function App() {
                 const today = new Date();
                 const dateStr = `${today.getMonth() + 1}월 ${today.getDate()}일`;
                 const affirmation = morningLetterAI?.affirmation || '';
-                const letter = morningLetterAI?.letter || '';
+                // [방어 처리] Gemini가 실수로 <br> 등 HTML 태그를 삽입한 경우 실제 줄바꿈으로 변환
+                const letter = (morningLetterAI?.letter || '').replace(/<br\s*\/?>/gi, '\n');
                 const isTranscribed = transcriptText.length >= affirmation.length && affirmation.length > 0;
 
                 return (
