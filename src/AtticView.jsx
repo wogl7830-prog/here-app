@@ -375,13 +375,13 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
         backgroundImage: 'none',
         color: '#3A2E2A',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif',
-        minHeight: '100vh',
+        minHeight: selectedCounselor ? '100vh' : 'auto',
         height: selectedCounselor ? '100vh' : 'auto',
         overflow: selectedCounselor ? 'hidden' : 'visible',
         display: 'flex', flexDirection: 'column', position: 'relative',
         transition: 'background-color 0.8s ease, color 0.8s ease',
         boxSizing: 'border-box',
-        paddingBottom: selectedCounselor ? '0px' : '80px'
+        paddingBottom: '0px'
       }}>
 
         {/* 상단 헤더 (상담실 목록에서만 표시) */}
@@ -409,7 +409,7 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
 
           {/* ── [Sub-Screen 1] 마음 메이트 선택 목록 ── */}
           {!selectedCounselor && (
-            <div style={{ padding: '24px 20px 100px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', boxSizing: 'border-box' }}>
+            <div style={{ padding: '24px 20px 30px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', boxSizing: 'border-box' }}>
               <div style={{ textAlign: 'center', padding: '4px 0 12px 0' }}>
                 <h2 style={{ fontSize: '1.4rem', color: '#3A2E2A', fontWeight: '800', margin: '0 0 10px 0', wordBreak: 'keep-all' }}>
                   <span>{userName && userName !== '당신' ? userName : '당신'} 님, 언제든 편하게 이야기 나눠요 🌸</span>
