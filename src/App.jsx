@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
+﻿import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import {
   loginWithGoogle,
   loginWithEmail,
@@ -2616,7 +2616,7 @@ export default function App() {
                               </div>
                               {bannerConfig.streak > 0 && (
                                 <div style={{ backgroundColor: '#FFFFFF', padding: '4px 10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-                                  <span style={{ fontSize: '0.75rem' }}>🔥</span>
+                                  <span style={{ fontSize: '0.75rem' }}>👣</span>
                                   <span style={{ fontSize: '0.65rem', color: '#712B13', fontWeight: '700' }}>{bannerConfig.streak}일째</span>
                                 </div>
                               )}
@@ -2780,7 +2780,7 @@ export default function App() {
                       <div className="ml-fade" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', padding: '40px 0' }}>
                         <p style={{ margin: 0, fontSize: '0.95rem', color: '#666', fontWeight: '500', letterSpacing: '0px' }}>오늘 느껴지는 감정 카드를 하나 선택해 보세요.</p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', maxWidth: '320px' }}>
-                          {['🌱 평온함', '☁️ 불안', '🌧️ 슬픔', '🔥 분노', '🫧 무기력', '✨ 설렘'].map(emo => (
+                          {['🌱 평온함', '☁️ 불안', '🌧️ 슬픔', '👣 분노', '🫧 무기력', '✨ 설렘'].map(emo => (
                             <button
                               key={emo}
                               onClick={() => handleStartMorningLetter(emo)}
