@@ -112,7 +112,7 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
   const [dangerSystemMessage, setDangerSystemMessage] = useState('');
 
   const isOnlyEmoji = (str) => {
-    if (!str) return false;
+    if (typeof str !== 'string') return false;
     const trimmed = str.trim();
     if (!trimmed) return false;
     const emojiRegex = /^(\p{Extended_Pictographic}|\u200d|\ufe0f|\s)+$/u;
@@ -225,7 +225,7 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
       let aiReply = '';
       
       try {
-        const parsed = JSON.parse(resultStr);
+        const parsed = typeof resultStr === 'object' ? resultStr : JSON.parse(resultStr);
         if (parsed.statusCode === 'DANGER') {
           setIsDangerState(true);
           setDangerSystemMessage(parsed.systemMessage || '위기 상황이 감지되었습니다.');
@@ -235,7 +235,7 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
           aiReply = parsed.reply || `${userName} 님의 이야기를 가만히 들으니 마음이 묵직해지네요. 제가 언제든 이 자리에 있을게요.`;
         }
       } catch (e) {
-        aiReply = resultStr || `${userName} 님의 이야기를 가만히 들으니 마음이 묵직해지네요. 제가 언제든 이 자리에 있을게요.`;
+        aiReply = (typeof resultStr === 'string' ? resultStr : resultStr?.reply) || `${userName} 님의 이야기를 가만히 들으니 마음이 묵직해지네요. 제가 언제든 이 자리에 있을게요.`;
       }
 
       setIsTyping(false);
@@ -251,7 +251,8 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
     } catch (err) {
       console.warn('Attic AI Chat Fallback:', err);
       setIsTyping(false);
-      const fallbackReply = `${userName} 님, 그동안 말하지 못했던 그 아픔과 피로가 참 깊으셨네요. 언제든 남들의 기대나 시선은 다 내려놓고, 이곳에서 온전히 편안하게 숨 고르시길 바랄게요. 제가 늘 따뜻하게 안아드릴게요. 🌸`;
+      const errorText = typeof err === 'string' ? err : (err?.message || '알 수 없는 오류가 발생했습니다.');
+      const fallbackReply = `${userName} 님, 그동안 말하지 못했던 그 아픔과 피로가 참 깊으셨네요. 언제든 남들의 기대나 시선은 다 내려놓고, 이곳에서 온전히 편안하게 숨 고르시길 바랄게요. 제가 늘 따뜻하게 안아드릴게요. 🌸 (오류: ${errorText})`;
       setMessages((prev) => [
         ...prev,
         {
