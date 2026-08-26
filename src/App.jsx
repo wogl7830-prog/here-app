@@ -71,7 +71,7 @@ const styles = {
   container: {
     backgroundColor: '#FDFBF7',
     minHeight: '100vh',
-    fontFamily: '"Nanum Myeongjo", serif',
+    fontFamily: "'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif",
     color: '#4A4A4A',
     display: 'flex',
     flexDirection: 'column',
@@ -2454,20 +2454,7 @@ export default function App() {
                 🌤️ 메인 대시보드 및 카테고리 (두 트랙 구조 공용)
             ═══════════════════════════════════════════ */}
               {(step === 'dashboard') && (() => {
-                // ── SVG 라인 아이콘 정의 (이모지 대체) ──
-                const SvgMorning = ({ color = 'rgba(255,255,255,0.85)' }) => (
-                  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="14" cy="14" r="5" stroke={color} strokeWidth="1.5" />
-                    <line x1="14" y1="3" x2="14" y2="6" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="14" y1="22" x2="14" y2="25" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="3" y1="14" x2="6" y2="14" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="22" y1="14" x2="25" y2="14" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="6.5" y1="6.5" x2="8.6" y2="8.6" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="19.4" y1="19.4" x2="21.5" y2="21.5" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="21.5" y1="6.5" x2="19.4" y2="8.6" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                    <line x1="8.6" y1="19.4" x2="6.5" y2="21.5" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                );
+                // ── SVG 라인 아이콘 정의 ──
                 const SvgForecast = ({ color = 'rgba(255,255,255,0.85)' }) => (
                   <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M8 18C5.8 18 4 16.2 4 14C4 11.8 5.8 10 8 10C8.3 7.7 10.3 6 12.5 6C15.1 6 17.2 8.1 17.2 10.7C17.2 10.8 17.2 10.9 17.2 11C18 11 18.7 11.4 19.2 12C20.2 12.3 21 13.3 21 14.5C21 16 19.7 17.2 18.2 17.2" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
@@ -2495,18 +2482,7 @@ export default function App() {
                 const isLoggedInUser = userSession && !userSession.isAnonymous;
                 const userNameDisplay = (isLoggedInUser && formData.name) ? formData.name : '당신';
 
-                // 오전 배너: 기질별 지지 포인트 예고
-                const _pvIlgan = formData.year ? calculateIlgan(formData.year, formData.month, formData.day) : { element: 0 };
-                const _pvLinesBank = [
-                  ['오늘은 조급함을 내려놓고 당신만의 속도를 가만히 존중해드릴게요.', '오늘은 타인의 시선에 흔들리지 않고 그대의 뿌리를 단단히 내리도록 곁에 있을게요.', '오늘은 당신이 억누르지 않고 자연스럽게 자라나는 하루가 되길 조용히 응원해요.'],
-                  ['오늘은 당신 안의 따뜻한 열정을 스스로 칭찬하고 밝히도록 도와드릴게요.', '오늘은 완벽하지 않은 그대의 모습도 있는 그대로 사랑할 수 있도록 함께할게요.', '오늘은 남의 기준 대신, 가장 당신다운 에너지를 펼치는 하루를 살며시 제안해요.'],
-                  ['오늘은 흔들리는 상황 속에서도 그대의 중심을 잃지 않는 힘을 함께 길러봐요.', '오늘은 어떤 잣대도 없이, 있는 그대로의 당신을 부드럽게 안아드릴게요.', '오늘은 성급하게 판단하지 않고 당신의 마음에 고요히 머무는 법을 나눠봐요.'],
-                  ['오늘은 그대가 스스로에게 세워둔 예리한 잣대를 다정하게 내려놓도록 도와드릴게요.', '오늘은 주변의 불필요한 소음을 차단하고, 온전히 당신에게 집중할 수 있도록 응원해요.', '오늘은 부러지기보다 유연하게 구부러지는 여유를 함께 가져봐요.'],
-                  ['오늘은 억지로 상황을 통제하기보다 자연스럽게 흘러가는 법을 살며시 속삭여드릴게요.', '오늘은 당신 내면 깊은 곳에 있는 지혜로운 목소리에 함께 귀 기울여봐요.', '오늘은 어떤 변화 속에서도 유연하고 부드럽게 호흡하는 하루를 함께 그려봐요.']
-                ];
-                const _todayIdx = new Date().getDate();
-                const _elementLines = _pvLinesBank[_pvIlgan.element] || _pvLinesBank[0];
-                const _morningPreview = _elementLines[_todayIdx % _elementLines.length];
+
 
                 // ── 연속 이용일수(Streak) 계산 로직 ──
                 const calculateStreak = (db) => {
@@ -2526,48 +2502,56 @@ export default function App() {
 
                 let baseBannerConfig;
                 
-                if (!isLoggedInUser) {
-                  baseBannerConfig = {
-                    theme: 'light', Icon: SvgMorning, label: 'TODAY\'S GREETING',
-                    title: `오늘 당신을 위한\n따뜻한 편지`,
-                    sub: `오늘 하루, 당신의 마음을 살며시 들여다볼게요.`,
-                    preview: _morningPreview, 
-                    gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)', 
-                    onClick: () => { 
-                      goToStep('morning_letter', { requireLogin: true });
-                    }
-                  };
-                } else {
-                  // 로그인 유저: 개인화된 "마음 날씨" 동적 배너
-                  const streak = calculateStreak(emotionDB);
-                  const todayStr = new Date().toLocaleDateString();
-                  const hasReadToday = localStorage.getItem('hasReadMorningLetter_' + todayStr) === 'true';
-                  
+                // ── 로그인/비로그인 공통: buildBriefing 기반 개인화 배너 ──
+                {
                   const briefing = buildBriefing(emotionDB, formData.name);
+                  const streak = isLoggedInUser ? calculateStreak(emotionDB) : 0;
 
-                  // 중복되는 '하늘' 단어를 제거하여 자연스러운 헤드라인으로 재구성
+                  // 헤드라인에서 "이름 님," prefix를 "이름 님의 하늘은,\n"으로 변환
+                  // 이름이 없는 비로그인은 prefix가 ''이므로 문장 자체로 자연스럽게 시작됨
+                  const namePrefix = formData.name ? `${formData.name} 님, ` : '';
                   let naturalHeadline = briefing.headline
-                    .replace(`${userNameDisplay} 님, `, `${userNameDisplay} 님의 하늘은,\n`)
+                    .replace(namePrefix, namePrefix ? `${formData.name} 님의 하늘은,\n` : '')
                     .replace('서서히 하늘이 열리고 있어요.', '서서히 열리고 있어요.')
                     .replace('오늘 하늘엔 틈새 햇살이 들어오고 있어요.', '틈새 햇살이 들어오고 있어요.')
                     .replace('오늘의 하늘이 기다리고 있어요.', '아직 맑아지기를 기다리고 있어요.');
 
-                  baseBannerConfig = {
-                    isPersonalized: true,
-                    theme: 'light',
-                    emoji: briefing.emoji,
-                    label: '오늘의 하늘',
-                    streak: streak,
-                    headline: naturalHeadline,
-                    sub: '오늘 아침, 그 결을 편지에 담아뒀어요.',
-                    gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)',
-                    hasRead: hasReadToday,
-                    onClick: () => { 
-                      localStorage.setItem('hasReadMorningLetter_' + todayStr, 'true');
-                      setIsEnteringRoom(true); 
-                      setTimeout(() => { setStep('morning_letter'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); 
-                    }
-                  };
+                  if (!isLoggedInUser) {
+                    baseBannerConfig = {
+                      isPersonalized: true,
+                      theme: 'light',
+                      emoji: briefing.emoji,
+                      label: '오늘의 하늘',
+                      streak: 0,
+                      headline: naturalHeadline,
+                      sub: '오늘 아침, 당신을 위한 편지가 기다리고 있어요.',
+                      gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)',
+                      hasRead: false,
+                      onClick: () => {
+                        goToStep('morning_letter', { requireLogin: true });
+                      }
+                    };
+                  } else {
+                    // 로그인 유저: 읽음 여부 추가 처리
+                    const todayStr = new Date().toLocaleDateString();
+                    const hasReadToday = localStorage.getItem('hasReadMorningLetter_' + todayStr) === 'true';
+                    baseBannerConfig = {
+                      isPersonalized: true,
+                      theme: 'light',
+                      emoji: briefing.emoji,
+                      label: '오늘의 하늘',
+                      streak: streak,
+                      headline: naturalHeadline,
+                      sub: '오늘 아침, 그 결을 편지에 담아뒀어요.',
+                      gradient: 'linear-gradient(135deg, #FFF5F0 0%, #FDF0E6 50%, #EDF5FA 100%)',
+                      hasRead: hasReadToday,
+                      onClick: () => {
+                        localStorage.setItem('hasReadMorningLetter_' + todayStr, 'true');
+                        setIsEnteringRoom(true);
+                        setTimeout(() => { setStep('morning_letter'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500);
+                      }
+                    };
+                  }
                 }
 
                 // ── [Proactive] 선제적 예보가 감지된 경우 배너 덮어쓰기 ──
@@ -2671,7 +2655,7 @@ export default function App() {
                             {bannerConfig.preview && (
                               <div style={{ margin: '0 0 18px 0', padding: '16px 24px', backgroundColor: cPreviewBg, borderRadius: '10px', borderLeft: `3px solid ${cPreviewBorder}` }}>
                                 <span style={{ fontSize: '0.65rem', color: cPreviewLabel, letterSpacing: '1.5px', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>오늘 그대에게 전하고 싶은 말</span>
-                                <span style={{ fontSize: '0.85rem', color: cPreviewText, fontStyle: 'italic', lineHeight: '1.6', fontFamily: '"Nanum Myeongjo", serif', fontWeight: isLight ? '600' : '400' }}>{bannerConfig.preview}</span>
+                                <span style={{ fontSize: '0.85rem', color: cPreviewText, lineHeight: '1.6', fontWeight: isLight ? '600' : '400' }}>{bannerConfig.preview}</span>
                               </div>
                             )}
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#FFFFFF', padding: '8px 24px', borderRadius: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
@@ -3905,7 +3889,7 @@ export default function App() {
                 (trackType === '비밀의 방앗간' || trackType === '성장 탐험가') && (
                   <div style={{ paddingRight: '5px' }}>
                     {aiSections?.statusCode && aiSections.statusCode !== 'NORMAL' ? (
-                      <div style={{ backgroundColor: '#FDFCFA', padding: '40px 20px', fontFamily: '"Nanum Myeongjo", serif', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', borderRadius: '24px', marginTop: '20px' }}>
+                      <div style={{ backgroundColor: '#FDFCFA', padding: '40px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', borderRadius: '24px', marginTop: '20px' }}>
                         <div style={{ maxWidth: '400px', width: '100%', backgroundColor: aiSections.statusCode === 'DANGER' ? '#FFF5F5' : '#FFF', padding: '40px 30px', borderRadius: '24px', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.06)', border: aiSections.statusCode === 'DANGER' ? '1px solid #FFD1D1' : '1px solid #F0EAE1' }}>
                           <h2 style={{ color: aiSections.statusCode === 'DANGER' ? '#D32F2F' : '#E2725B', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '20px', lineHeight: '1.4' }}>
                             {aiSections.statusCode === 'DANGER' ? '잠시 멈추어 주세요' : '마음을 온전히 전하기 위해'}
@@ -4255,7 +4239,6 @@ export default function App() {
                     padding: '18px 16px', marginBottom: '20px',
                     fontSize: '0.88rem', color: '#4A3A30', lineHeight: '1.8',
                     wordBreak: 'keep-all',
-                    fontFamily: '"Nanum Myeongjo", serif',
                   }}>
                     <b style={{ color: '#C17A6B' }}>{formData.name || '당신'} 님,</b><br />
                     요즘 마음의 날씨가 꽤 흐렸던 것 같아요.<br />
@@ -4718,7 +4701,7 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
 
   if (mockData?.statusCode && mockData.statusCode !== 'NORMAL') {
     return (
-      <div style={{ backgroundColor: '#FDFCFA', minHeight: '100vh', padding: '40px 20px', fontFamily: '"Nanum Myeongjo", serif', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ backgroundColor: '#FDFCFA', minHeight: '100vh', padding: '40px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ maxWidth: '400px', width: '100%', backgroundColor: mockData.statusCode === 'DANGER' ? '#FFF5F5' : '#FFF', padding: '40px 30px', borderRadius: '24px', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.06)', border: mockData.statusCode === 'DANGER' ? '1px solid #FFD1D1' : '1px solid #F0EAE1' }}>
           <h2 style={{ color: mockData.statusCode === 'DANGER' ? '#D32F2F' : '#E2725B', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '20px', lineHeight: '1.4' }}>
             {mockData.statusCode === 'DANGER' ? '잠시 멈추어 주세요' : '마음을 온전히 전하기 위해'}
@@ -4748,7 +4731,6 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
       backgroundColor: '#FDFCFA', // 완전한 미니멀 화이트/베이지
       minHeight: '100vh',
       padding: '40px 20px',
-      fontFamily: '"Nanum Myeongjo", serif', // 미니멀 텍스트 감성
       color: '#333'
     }}>
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
