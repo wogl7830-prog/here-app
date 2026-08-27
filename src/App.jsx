@@ -4771,13 +4771,13 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
               {/* 방패/선 메타포 시각화 */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '40px 0' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#2C3E50', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: '1.2rem', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(44,62,80,0.2)' }}>나</div>
+                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#2C3E50', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: (formData?.name || '나').length > 3 ? '0.75rem' : (formData?.name || '나').length > 2 ? '0.9rem' : '1.2rem', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(44,62,80,0.2)', whiteSpace: 'nowrap', padding: '0 4px', boxSizing: 'border-box', textAlign: 'center', lineHeight: '1.2', wordBreak: 'keep-all' }}>{formData?.name || '나'}</div>
                 </div>
                 <div style={{ height: '90px', width: '2.5px', backgroundColor: '#E2725B', position: 'relative' }}>
                   <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: '#FFF', padding: '4px 10px', border: '1.5px solid #E2725B', borderRadius: '12px', fontSize: '0.75rem', color: '#E2725B', fontWeight: 'bold', whiteSpace: 'nowrap' }}>경계선</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#8B4513', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: '1.1rem', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(139,69,19,0.2)' }}>{partnerName.substring(0, 2)}</div>
+                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#8B4513', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: partnerName.length > 3 ? '0.75rem' : partnerName.length > 2 ? '0.9rem' : '1.1rem', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(139,69,19,0.2)', whiteSpace: 'nowrap', padding: '0 4px', boxSizing: 'border-box', textAlign: 'center', lineHeight: '1.2', wordBreak: 'keep-all' }}>{partnerName}</div>
                 </div>
               </div>
 
