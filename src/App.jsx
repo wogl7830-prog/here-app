@@ -4191,7 +4191,7 @@ export default function App() {
         const isTargeted = recent3.length >= 1 && recent3.every(r =>
           NEG_KEYWORDS.some(kw => (r.text || '').includes(kw))
         );
-        return (
+        return false && (
           <>
             <button
               id="crm-sim-btn"
