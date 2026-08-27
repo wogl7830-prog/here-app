@@ -103,6 +103,7 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const [ticketCount, setTicketCount] = useState(1); // 마음 한 아름
   const [shieldCount, setShieldCount] = useState(3); // 마음 방패
@@ -215,6 +216,9 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
 
     const userText = textToSend;
     setInputVal('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     const userMsg = {
       id: Date.now(),
@@ -800,17 +804,29 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', boxSizing: 'border-box' }}>
                           <div style={{
                             flex: 1, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', border: '1px solid #EAE0D8',
-                            borderRadius: '50px', padding: '0 16px', boxSizing: 'border-box', boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-                            minWidth: 0
+                            borderRadius: '24px', padding: '0 16px', boxSizing: 'border-box', boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                            minWidth: 0, minHeight: '44px'
                           }}>
-                            <input
+                            <textarea
+                              ref={textareaRef}
                               value={inputVal}
-                              onChange={(e) => setInputVal(e.target.value)}
-                              onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
+                              onChange={(e) => {
+                                setInputVal(e.target.value);
+                                e.target.style.height = 'auto';
+                                e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
+                              }}
+                              onKeyDown={(e) => { 
+                                if (e.key === 'Enter' && !e.shiftKey) { 
+                                  e.preventDefault();
+                                  handleSendMessage(); 
+                                } 
+                              }}
                               placeholder="메시지 입력"
+                              rows={1}
                               style={{
                                 flex: 1, padding: '12px 0', border: 'none', backgroundColor: 'transparent',
-                                color: '#3A2E2A', fontSize: '0.95rem', outline: 'none', minWidth: 0
+                                color: '#3A2E2A', fontSize: '0.95rem', outline: 'none', minWidth: 0,
+                                resize: 'none', overflowY: 'auto', display: 'block', lineHeight: '1.4'
                               }}
                             />
                           </div>
