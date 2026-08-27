@@ -4653,7 +4653,7 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
         const userName = formData?.name || '당신';
         if (trackType === '나를 지키는 울타리') {
           const relationType = formData?.partnerRelation || '지인';
-          data = await fetchGeminiRelationshipAnalysis(text, action, partnerName, relationType, defenseStyle);
+          data = await fetchGeminiRelationshipAnalysis(text, action, partnerName, relationType, defenseStyle, userName);
         } else if (isCouple) {
           data = await fetchGeminiCoupleAnalysis(text, action, partnerName, emotionStr, goal, coreNeed, userName);
         } else {
