@@ -830,6 +830,8 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                         </div>
                       </>
                     )}
+                  </>
+                )}
               </div>
 
             </div>
