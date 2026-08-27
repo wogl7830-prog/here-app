@@ -233,8 +233,10 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
       setHasSuggestedWrapUp(true);
     }
 
+    const recentMessagesStr = messages.slice(-6).map(m => `${m.sender === 'user' ? '내담자' : '상담사'}: ${m.text}`).join('\n');
+
     try {
-      let resultStr = await fetchCounselingReply(selectedCounselor.id, userName, userText, { isSuggestWrapUp });
+      let resultStr = await fetchCounselingReply(selectedCounselor.id, userName, userText, { isSuggestWrapUp, chatHistory: recentMessagesStr });
       let aiReply = '';
       
       try {
@@ -282,9 +284,11 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
     setIsWrappingUp(true);
     setIsTyping(true);
 
+    const recentMessagesStr = messages.slice(-6).map(m => `${m.sender === 'user' ? '내담자' : '상담사'}: ${m.text}`).join('\n');
+
     try {
       const systemWrapUpText = "상담을 마무리해주세요."; // 시스템 백그라운드 프롬프트
-      let resultStr = await fetchCounselingReply(selectedCounselor.id, userName, systemWrapUpText, { isForceWrapUp: true });
+      let resultStr = await fetchCounselingReply(selectedCounselor.id, userName, systemWrapUpText, { isForceWrapUp: true, chatHistory: recentMessagesStr });
       let aiReply = '';
       
       try {

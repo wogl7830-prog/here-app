@@ -459,7 +459,7 @@ export const fetchGeminiRelationshipAnalysis = async (
  * 10. 다정한 상담소 채팅 응답 엔진 (안전 가드레일 포함)
  */
 export const fetchCounselingReply = async (counselorId, userName, userText, options = {}) => {
-  const { isSuggestWrapUp, isForceWrapUp } = options;
+  const { isSuggestWrapUp, isForceWrapUp, chatHistory } = options;
   let roleSpecificGuideline = '';
   if (counselorId === 'inner') {
     roleSpecificGuideline = `[페르소나: 나의 마음 상담사]
@@ -481,7 +481,7 @@ ${roleSpecificGuideline}
 
 ### [Input Context]
 - 내담자 이름: "${userName}"
-- 내담자의 입력 메시지: "${userText}"
+${chatHistory ? `- 이전 대화 내역 (최근 6개 메시지):\n${chatHistory}\n` : ''}- 내담자의 최신 입력 메시지: "${userText}"
 
 ### [Guideline: 일반 톤앤매너 및 소크라테스식 대화법]
 1. 내담자의 이름을 다정하게 부르며, "유저", "사용자", "내담자" 같은 기계적 호칭을 절대 사용하지 마세요.
@@ -491,6 +491,11 @@ ${roleSpecificGuideline}
    - 예/아니오로 답할 수 있는 폐쇄형 질문("~하셨나요?")보다는, 사용자가 스스로 생각해보게 만드는 열린 질문("~은 어떠셨어요?", "그럴 때 어떤 마음이 드셨어요?")을 사용하세요.
    - 매 응답마다 기계적으로 똑같은 패턴의 질문을 반복하지 말고, 대화 맥락에 맞게 자연스럽게 다른 질문을 던지세요.
    - 통찰 없이 질문만 던지지 말고, 반드시 공감/통찰 먼저 전한 후 질문으로 마무리하세요.
+
+### [대화 맥락 추적 규칙]
+- 질문을 던지기 전에, 지금까지의 대화(이전 대화 내역)에서 이미 물어봤던 질문의 '종류'를 확인하세요. 표현만 다르고 실질적으로 같은 내용을 다시 묻지 마세요. (예: "어떤 마음이 드셨어요?"와 "어떤 생각이 느껴지세요?"는 다른 문장이지만 같은 종류의 질문입니다.)
+- 사용자가 이미 감정/생각을 답변했다면, 그 답변 내용을 반드시 반영해서 다음 질문을 만드세요. 답변을 무시하고 이전과 같은 범주의 질문으로 되돌아가지 마세요.
+- 만약 직전 상담사 응답에서 스스로 어떤 가설이나 추측(예: 과거 경험, 특정 패턴)을 제시했다면, 다음 질문은 반드시 그 가설을 확인하거나 더 파고드는 방향이어야 합니다. 가설을 던져놓고 무관한 일반 질문으로 돌아가지 마세요.
 
 ${isForceWrapUp ? `### [특별 지시: 대화 마무리 (사용자 요청)]
 - 사용자가 명시적으로 대화 마무리를 요청했습니다.
