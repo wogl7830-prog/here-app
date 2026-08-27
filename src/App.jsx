@@ -4638,6 +4638,7 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
   const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState(null);
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -4664,23 +4665,8 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
         }
       } catch (err) {
         console.warn('Couple Analysis API Failed:', err);
-        // Fallback
-        const isConflict = userConcern && (userConcern.includes('싸우') || userConcern.includes('상처'));
         if (!ignore) {
-          setAnalysisData({
-            map_data: {
-              user: { x: isConflict ? -40 : -20, y: isConflict ? 60 : 30 },
-              partner: { x: isConflict ? 50 : 30, y: isConflict ? -30 : -10 }
-            },
-            statusStatement: "각자의 동굴 속에서 잠시 숨을 고르고 있네요.",
-            mind_prescription: "현재 당신의 에너지는 '문제 해결과 수용'을 향해 뻗어 있지만, 상대방의 에너지는 '방어와 고립'의 영역으로 웅크려 있습니다. 당신의 조급함 역시 관계를 지키고 싶은 뜨거운 애착의 증거일 뿐입니다. 비난을 질문으로 바꾸는 작은 여유가 두 사람의 온도를 바꿉니다.",
-            share_main_sentence: "오늘 하루 중, 당신의 어깨가 가장 가벼웠던 순간은 언제였어?",
-            share_sub_sentence: "우리 서로 마음 다치지 않게, 편안하게 이야기 나누고 싶어.",
-            extracted_emotions: ["답답함", "피로감"],
-            boundary_report: "상대방의 행동은 상대방 고유의 내면적 불안에서 비롯되었습니다. 당신이 예민한 것이 아니니, 자책을 멈추고 안전한 거리를 두세요.",
-            persona_script: "지금은 제가 여유가 없어서요, 나중에 다시 이야기하시죠.",
-            shield_affirmation: "내 감정의 주도권은 나에게 있다."
-          });
+          setFetchError(true);
         }
       } finally {
         if (!ignore) {
@@ -4696,6 +4682,25 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
     return (
       <div style={{ position: 'relative', minHeight: '60vh', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <LoadingScreen trackType={trackType} userName={formData?.name} />
+      </div>
+    );
+  }
+
+  if (fetchError || !analysisData) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', padding: '20px', textAlign: 'center' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⚠️</div>
+        <h2 style={{ fontSize: '1.2rem', color: '#FDF0E6', marginBottom: '8px', fontWeight: 'bold' }}>분석에 실패했어요</h2>
+        <p style={{ fontSize: '0.95rem', color: '#B0A098', marginBottom: '24px', lineHeight: '1.6' }}>
+          입력하신 내용이 너무 복잡하거나 서버가 잠시 혼잡할 수 있습니다.<br />
+          다시 한번 시도해 주세요.
+        </p>
+        <button 
+          onClick={onReset}
+          style={{ padding: '12px 24px', borderRadius: '24px', border: 'none', backgroundColor: '#E2725B', color: '#FFF', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(226,114,91,0.3)' }}
+        >
+          다시 시도하기
+        </button>
       </div>
     );
   }

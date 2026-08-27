@@ -28,6 +28,9 @@ export const sendPromptToGemini = async (prompt, payloadInfo = null, options = {
     if (options.temperature !== undefined) {
       requestBody.temperature = options.temperature;
     }
+    if (options.maxOutputTokens !== undefined) {
+      requestBody.maxOutputTokens = options.maxOutputTokens;
+    }
 
     const response = await fetch(BASE_URL, {
       method: 'POST',
@@ -250,22 +253,10 @@ export const fetchGeminiRelationshipAnalysisV2 = async ({
   "share_main_sentence": "카톡 공유 카드 중앙에 들어갈 핵심 진심 문구 (1~2문장)",
   "share_sub_sentence": "핵심 문구 아래 들어갈 부드럽게 대화를 여는 덧붙이는 말 (1문장)",
   "extracted_emotions": ["감정1", "감정2"],
-  "premium_teaser": "심층 분석에 대한 호기심을 극대화하는 한 줄의 훅(Hook) 문구",
-  "premium_deepdive_report": {
-    "core_conflict_mechanism": "두 사람의 기질적 차이가 어떻게 반복되는 방어기제의 충돌을 만들어내는지 심층 분석 (3~4문장)",
-    "unconscious_projection": "상대방의 행동 아래 숨겨진 결핍이나 불안이 무엇이며, 유저가 왜 이 행동에 아프게 반응(투사)하는지 다세대적 관점에서 해석 (3~4문장)",
-    "healing_insight": "서로의 내면 아이를 안아주기 위한 심리학적 통찰 제시 (2~3문장)"
-  },
-  "premium_scenario_expansion": {
-    "stage_1_soft_boundary": "[3~4문장] 부드럽게 경계선 긋기 (반말 구어체)",
-    "expected_reaction_A": "[직접 인용구(\"\")] 상대의 억울함/서운함 핑계 대사",
-    "expected_reaction_B": "[직접 인용구(\"\")] 상대가 더 크게 폭발하거나 무례하게 선을 넘는 대사",
-    "stage_2_cushion_response": "[3~4문장] 예상 반응에 대한 쿠션어 대처",
-    "stage_3_firm_timeout": "[3~4문장] 단호한 타임아웃 선언"
-  }
+  "premium_teaser": "심층 분석에 대한 호기심을 극대화하는 한 줄의 훅(Hook) 문구"
 }`;
 
-  return sendPromptToGemini(prompt);
+  return sendPromptToGemini(prompt, null, { maxOutputTokens: 2048 });
 };
 
 /**
@@ -459,21 +450,9 @@ export const fetchGeminiRelationshipAnalysis = async (
   "boundary_report": "대인관계 심리학 기반 분석 리포트 (3~4문장)",
   "persona_script": "선택한 방어 태세에 맞춘 실전 대화 스크립트 (1~2문장)",
   "shield_affirmation": "오늘의 방패 문장 (1문장)",
-  "premium_teaser": "심층 분석 훅 문구",
-  "premium_deepdive_report": {
-    "core_conflict_mechanism": "심층 분석 (3~4문장)",
-    "unconscious_projection": "무의식 투사 해석 (3~4문장)",
-    "healing_insight": "치유 통찰 (2~3문장)"
-  },
-  "premium_scenario_expansion": {
-    "stage_1_soft_boundary": "1단계 부드러운 경계",
-    "expected_reaction_A": "\"상대방 반응 예시 A\"",
-    "stage_2_cushion_response": "2단계 쿠션 응답",
-    "expected_reaction_B": "\"상대방 반응 예시 B\"",
-    "stage_3_firm_timeout": "3단계 단호한 타임아웃"
-  }
+  "premium_teaser": "심층 분석 훅 문구"
 }`;
-  return sendPromptToGemini(prompt, { userConcern, partnerAction, partnerName, relationType, defenseStyle, userName });
+  return sendPromptToGemini(prompt, { userConcern, partnerAction, partnerName, relationType, defenseStyle, userName }, { maxOutputTokens: 2048 });
 };
 
 /**
