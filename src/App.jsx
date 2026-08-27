@@ -3831,6 +3831,7 @@ export default function App() {
               {step === 'concern' && (trackType === '다정한 식탁' || trackType === '나를 지키는 울타리') && (
                 <FamilyConcernInputView
                   partnerName={formData?.partnerName || '상대방'}
+                  partnerRelation={formData?.partnerRelation || '지인'}
                   trackType={trackType}
                   currentConcernData={currentConcernData}
                   setCurrentConcernData={setCurrentConcernData}
@@ -5178,7 +5179,7 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
 }
 
 // H.E.R.e 다정한 식탁 - 고민 입력 화면 컴포넌트 (감정 칩 기능 추가)
-function FamilyConcernInputView({ partnerName, trackType, onNext, currentConcernData, setCurrentConcernData, savedConcernData }) {
+function FamilyConcernInputView({ partnerName, partnerRelation, trackType, onNext, currentConcernData, setCurrentConcernData, savedConcernData }) {
   const [isAnalyzingEmotion, setIsAnalyzingEmotion] = useState(false);
 
   const handleDoneClick = async () => {
@@ -5414,22 +5415,29 @@ function FamilyConcernInputView({ partnerName, trackType, onNext, currentConcern
                 <span style={{ display: 'block', fontSize: '0.8rem', color: '#A38B7D', fontWeight: 'normal', marginTop: '4px' }}>(원하는 대처 방식을 하나 선택해주세요)</span>
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
-                {['건조하고 차분한 철벽', '부드럽고 우아한 화제 전환', '예의 바르지만 단호한 거절'].map((style) => (
-                  <button
-                    key={style}
-                    onClick={() => setCurrentConcernData(prev => ({ ...prev, defenseStyle: style }))}
-                    style={{
-                      width: '100%', maxWidth: '300px', padding: '12px 16px', borderRadius: '12px',
-                      border: `1.5px solid ${currentConcernData.defenseStyle === style ? '#E2725B' : '#DDD3CB'}`,
-                      backgroundColor: currentConcernData.defenseStyle === style ? '#E2725B' : '#FBF8F5',
-                      color: currentConcernData.defenseStyle === style ? 'white' : '#7A5C48',
-                      fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s ease',
-                      boxShadow: currentConcernData.defenseStyle === style ? '0 3px 10px rgba(226,114,91,0.25)' : 'none'
-                    }}
-                  >
-                    {style}
-                  </button>
-                ))}
+                {(() => {
+                  const isCloseRelation = partnerRelation && (partnerRelation.includes('연인') || partnerRelation.includes('가족') || partnerRelation.includes('부부') || partnerRelation.includes('배우자'));
+                  const options = isCloseRelation 
+                    ? ['솔직하게 서운함을 표현하는 대화', '서로의 입장을 조율하는 대화', '단호하게 내 시간을 지키는 대화']
+                    : ['건조하고 차분한 철벽', '부드럽고 우아한 화제 전환', '예의 바르지만 단호한 거절'];
+                  
+                  return options.map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => setCurrentConcernData(prev => ({ ...prev, defenseStyle: style }))}
+                      style={{
+                        width: '100%', maxWidth: '300px', padding: '12px 16px', borderRadius: '12px',
+                        border: `1.5px solid ${currentConcernData.defenseStyle === style ? '#E2725B' : '#DDD3CB'}`,
+                        backgroundColor: currentConcernData.defenseStyle === style ? '#E2725B' : '#FBF8F5',
+                        color: currentConcernData.defenseStyle === style ? 'white' : '#7A5C48',
+                        fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s ease',
+                        boxShadow: currentConcernData.defenseStyle === style ? '0 3px 10px rgba(226,114,91,0.25)' : 'none'
+                      }}
+                    >
+                      {style}
+                    </button>
+                  ));
+                })()}
               </div>
             </div>
           </div>
