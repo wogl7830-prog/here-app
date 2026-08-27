@@ -5154,13 +5154,13 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
         <div style={{ margin: '40px auto 20px auto', maxWidth: '380px' }}>
           <div style={{ backgroundColor: '#FAF7F5', borderRadius: '16px', padding: '24px', border: '1px solid #F3ECE8', textAlign: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
             <p style={{ fontSize: '0.95rem', color: '#6A5B53', fontWeight: 'bold', margin: '0 0 16px 0', wordBreak: 'keep-all', lineHeight: '1.5' }}>
-              🧸 방금 마주한 내 안의 어린아이, 조금 더 안아줄까요?
+              ✨ 이 감정을 조금 더 들여다보고 싶다면, 나의 방에서 이어가 보세요
             </p>
             <button
               onClick={onGoToMyRoom}
               style={{ width: '100%', backgroundColor: '#E2725B', color: '#FFF', border: 'none', borderRadius: '12px', padding: '16px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(226,114,91,0.2)' }}
             >
-              나의 방에서 내면 아이와 대화하기
+              나의 방에서 이어가기
             </button>
           </div>
         </div>
