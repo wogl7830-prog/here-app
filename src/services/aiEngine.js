@@ -458,7 +458,8 @@ export const fetchGeminiRelationshipAnalysis = async (
 /**
  * 10. 다정한 상담소 채팅 응답 엔진 (안전 가드레일 포함)
  */
-export const fetchCounselingReply = async (counselorId, userName, userText) => {
+export const fetchCounselingReply = async (counselorId, userName, userText, options = {}) => {
+  const { isSuggestWrapUp, isForceWrapUp } = options;
   let roleSpecificGuideline = '';
   if (counselorId === 'inner') {
     roleSpecificGuideline = `[페르소나: 나의 마음 상담사]
@@ -490,6 +491,16 @@ ${roleSpecificGuideline}
    - 예/아니오로 답할 수 있는 폐쇄형 질문("~하셨나요?")보다는, 사용자가 스스로 생각해보게 만드는 열린 질문("~은 어떠셨어요?", "그럴 때 어떤 마음이 드셨어요?")을 사용하세요.
    - 매 응답마다 기계적으로 똑같은 패턴의 질문을 반복하지 말고, 대화 맥락에 맞게 자연스럽게 다른 질문을 던지세요.
    - 통찰 없이 질문만 던지지 말고, 반드시 공감/통찰 먼저 전한 후 질문으로 마무리하세요.
+
+${isForceWrapUp ? `### [특별 지시: 대화 마무리 (사용자 요청)]
+- 사용자가 명시적으로 대화 마무리를 요청했습니다.
+- 앞선 4번 규칙(질문으로 마무리)은 무시하세요.
+- 오늘 나눈 대화를 짧게 요약하고, 따뜻한 응원 한마디로 부드럽게 작별 인사를 건네며 대화를 종료하세요. (절대 질문으로 끝내지 마세요)` : ''}
+${isSuggestWrapUp && !isForceWrapUp ? `### [특별 지시: 대화 마무리 제안]
+- 대화가 어느 정도 길어졌습니다.
+- 앞선 4번 규칙(일반적인 질문으로 마무리) 대신, 이번 응답의 마지막에는 딱 1번만 대화 마무리를 제안하는 질문을 던지세요.
+- 예: "...오늘은 여기까지 이야기 나눠볼까요? 아니면 조금 더 나누고 싶으신 부분이 있으실까요?"
+- 한 응답에 질문이 두 개 겹치지 않도록 주의하세요.` : ''}
 
 ### [안전 가드레일 (Safety Guardrails) - 최우선 평가]
 사용자의 메시지를 분석하여 아래 4가지 상태 중 하나를 'statusCode'로 분류하세요.

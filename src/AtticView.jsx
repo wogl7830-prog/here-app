@@ -110,6 +110,9 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
   const [showWelcomePopup, setShowWelcomePopup] = useState(true); // 초기 팝업 상태
   const [isDangerState, setIsDangerState] = useState(false);
   const [dangerSystemMessage, setDangerSystemMessage] = useState('');
+  const [hasSuggestedWrapUp, setHasSuggestedWrapUp] = useState(false);
+  const [isWrappingUp, setIsWrappingUp] = useState(false);
+  const [isWrappedUp, setIsWrappedUp] = useState(false);
 
   const isOnlyEmoji = (str) => {
     if (typeof str !== 'string') return false;
@@ -195,6 +198,9 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ]);
+    setIsWrappedUp(false);
+    setIsWrappingUp(false);
+    setHasSuggestedWrapUp(false);
     window.scrollTo(0, 0);
   };
 
@@ -220,8 +226,15 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
 
+    const userMessageCount = messages.filter(m => m.sender === 'user').length + 1;
+    let isSuggestWrapUp = false;
+    if (userMessageCount >= 8 && !hasSuggestedWrapUp) {
+      isSuggestWrapUp = true;
+      setHasSuggestedWrapUp(true);
+    }
+
     try {
-      let resultStr = await fetchCounselingReply(selectedCounselor.id, userName, userText);
+      let resultStr = await fetchCounselingReply(selectedCounselor.id, userName, userText, { isSuggestWrapUp });
       let aiReply = '';
       
       try {
@@ -262,6 +275,57 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
+    }
+  };
+
+  const handleForceWrapUp = async () => {
+    setIsWrappingUp(true);
+    setIsTyping(true);
+
+    try {
+      const systemWrapUpText = "상담을 마무리해주세요."; // 시스템 백그라운드 프롬프트
+      let resultStr = await fetchCounselingReply(selectedCounselor.id, userName, systemWrapUpText, { isForceWrapUp: true });
+      let aiReply = '';
+      
+      try {
+        const parsed = typeof resultStr === 'object' ? resultStr : JSON.parse(resultStr);
+        if (parsed.statusCode === 'DANGER') {
+          setIsDangerState(true);
+          setDangerSystemMessage(parsed.systemMessage || '위기 상황이 감지되었습니다.');
+          setIsTyping(false);
+          return;
+        } else {
+          aiReply = parsed.reply || `${userName} 님, 오늘 이야기 나눠주셔서 감사합니다. 언제든 다시 찾아주세요.`;
+        }
+      } catch (e) {
+        aiReply = (typeof resultStr === 'string' ? resultStr : resultStr?.reply) || `${userName} 님, 오늘 이야기 나눠주셔서 감사합니다. 언제든 다시 찾아주세요.`;
+      }
+
+      setIsTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: 'ai',
+          text: aiReply,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+      setIsWrappedUp(true);
+    } catch (err) {
+      console.warn('Attic AI Chat WrapUp Fallback:', err);
+      setIsTyping(false);
+      const fallbackReply = `${userName} 님, 오늘 이렇게 속마음을 들려주셔서 고마워요. 언제든 마음이 무거울 때 다시 찾아주세요. 🌸`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: 'ai',
+          text: fallbackReply,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+      setIsWrappedUp(true);
     }
   };
 
@@ -699,43 +763,73 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', boxSizing: 'border-box' }}>
-                      <div style={{
-                        flex: 1, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', border: '1px solid #EAE0D8',
-                        borderRadius: '50px', padding: '0 16px', boxSizing: 'border-box', boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-                        minWidth: 0
-                      }}>
-                        <input
-                          value={inputVal}
-                          onChange={(e) => setInputVal(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
-                          placeholder="메시지 입력"
+                    {isWrappedUp ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
+                        <button
+                          onClick={() => { setSelectedCounselor(null); setMessages([]); setIsWrappedUp(false); setHasSuggestedWrapUp(false); setIsWrappingUp(false); }}
                           style={{
-                            flex: 1, padding: '12px 0', border: 'none', backgroundColor: 'transparent',
-                            color: '#3A2E2A', fontSize: '0.95rem', outline: 'none', minWidth: 0
+                            backgroundColor: '#FFFFFF', border: '1px solid #EAE0D8', borderRadius: '24px',
+                            padding: '12px 24px', color: '#5C3A21', fontSize: '0.95rem', fontWeight: 'bold',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.05)', cursor: 'pointer', transition: 'all 0.2s'
                           }}
-                        />
+                        >
+                          목록으로 돌아가기
+                        </button>
                       </div>
+                    ) : (
+                      <>
+                        {!isWrappedUp && messages.length > 1 && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                            <button
+                              onClick={handleForceWrapUp}
+                              disabled={isTyping || isWrappingUp}
+                              style={{
+                                background: 'none', border: 'none', color: '#8E8E93', fontSize: '0.85rem',
+                                textDecoration: 'underline', cursor: isTyping || isWrappingUp ? 'default' : 'pointer',
+                                padding: '4px 8px', transition: 'color 0.2s'
+                              }}
+                            >
+                              {isWrappingUp ? '마무리하는 중...' : '상담 마무리하기'}
+                            </button>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', boxSizing: 'border-box' }}>
+                          <div style={{
+                            flex: 1, display: 'flex', alignItems: 'center', backgroundColor: '#FFFFFF', border: '1px solid #EAE0D8',
+                            borderRadius: '50px', padding: '0 16px', boxSizing: 'border-box', boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                            minWidth: 0
+                          }}>
+                            <input
+                              value={inputVal}
+                              onChange={(e) => setInputVal(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
+                              placeholder="메시지 입력"
+                              style={{
+                                flex: 1, padding: '12px 0', border: 'none', backgroundColor: 'transparent',
+                                color: '#3A2E2A', fontSize: '0.95rem', outline: 'none', minWidth: 0
+                              }}
+                            />
+                          </div>
 
-                      <button
-                        onClick={() => handleSendMessage()}
-                        disabled={!inputVal.trim() || isTyping}
-                        style={{
-                          width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#FEE500',
-                          opacity: inputVal.trim() && !isTyping ? 1 : 0.4, border: 'none', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center',
-                          cursor: inputVal.trim() && !isTyping ? 'pointer' : 'default',
-                          flexShrink: 0, padding: 0, transition: 'opacity 0.2s ease'
-                        }}
-                        title="전송"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 19V5M5 12l7-7 7 7"/>
-                        </svg>
-                      </button>
-                    </div>
-                  </>
-                )}
+                          <button
+                            onClick={() => handleSendMessage()}
+                            disabled={!inputVal.trim() || isTyping}
+                            style={{
+                              width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#FEE500',
+                              opacity: inputVal.trim() && !isTyping ? 1 : 0.4, border: 'none', display: 'flex',
+                              alignItems: 'center', justifyContent: 'center',
+                              cursor: inputVal.trim() && !isTyping ? 'pointer' : 'default',
+                              flexShrink: 0, padding: 0, transition: 'opacity 0.2s ease'
+                            }}
+                            title="전송"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 19V5M5 12l7-7 7 7"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </>
+                    )}
               </div>
 
             </div>
