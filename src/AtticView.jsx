@@ -825,7 +825,7 @@ export default function AtticView({ userName = '당신', onReset, setToastMsg, o
                               rows={1}
                               style={{
                                 flex: 1, padding: '12px 0', border: 'none', backgroundColor: 'transparent',
-                                color: '#3A2E2A', fontSize: '0.95rem', outline: 'none', minWidth: 0,
+                                color: '#3A2E2A', fontSize: '0.95rem', fontFamily: 'inherit', outline: 'none', minWidth: 0,
                                 resize: 'none', overflowY: 'auto', display: 'block', lineHeight: '1.4'
                               }}
                             />
