@@ -705,6 +705,20 @@ export default function App() {
   const [isSharedMode, setIsSharedMode] = useState(false);
   const [sharedStep, setSharedStep] = useState('landing');
   const [toastMsg, setToastMsg] = useState('');
+
+  // -- Daily Limit Logic --
+  const MAX_DAILY_LIMIT = 3;
+  const [showLimitPopup, setShowLimitPopup] = useState(false);
+  const getTodayKey = () => {
+    const d = new Date();
+    return `analysis_count_shared_${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  };
+  const getDailyUsageCount = () => parseInt(localStorage.getItem(getTodayKey()) || '0', 10);
+  const incrementDailyUsageCount = () => {
+    const c = getDailyUsageCount() + 1;
+    localStorage.setItem(getTodayKey(), c);
+    return c;
+  };
   const [showKnockBox, setShowKnockBox] = useState(false);
   const [isWeatherOpen, setIsWeatherOpen] = useState(false);
   const [isBreathingOpen, setIsBreathingOpen] = useState(false);
@@ -1301,6 +1315,8 @@ export default function App() {
             deepAnalysis3: aiJson.deep_analysis_3_action || '',
             statusCode: 'NORMAL'
           });
+          const newCount = incrementDailyUsageCount();
+          setToastMsg(`오늘 3회 중 ${newCount}회 사용했어요 (${MAX_DAILY_LIMIT - newCount}회 남음) 🌿`);
         }
       } catch (e) {
         console.error('[SelfAnalysis] API 실패:', e);
@@ -1317,6 +1333,11 @@ export default function App() {
   };
 
   const handleConcernSubmit = () => {
+    if (getDailyUsageCount() >= MAX_DAILY_LIMIT) {
+      setShowLimitPopup(true);
+      return;
+    }
+
     // '나의 방'(비밀의 방앗간): 10자 이상 + 감정 칩 1개 이상 필요
     if (trackType === '비밀의 방앗간') {
       if (currentConcernData.text.length < 10 || currentConcernData.emotions.length === 0) return;
@@ -3837,6 +3858,10 @@ export default function App() {
                   setCurrentConcernData={setCurrentConcernData}
                   savedConcernData={savedConcernData}
                   onNext={() => {
+                    if (getDailyUsageCount() >= MAX_DAILY_LIMIT) {
+                      setShowLimitPopup(true);
+                      return;
+                    }
                     setIsLoadingResult(true);
                     setTimeout(() => {
                       setIsLoadingResult(false);
@@ -3869,6 +3894,10 @@ export default function App() {
                     coreNeed={currentConcernData.coreNeed}
                     trackType={trackType}
                     formData={formData}
+                    onAnalysisSuccess={() => {
+                      const newCount = incrementDailyUsageCount();
+                      setToastMsg(`오늘 3회 중 ${newCount}회 사용했어요 (${MAX_DAILY_LIMIT - newCount}회 남음) 🌿`);
+                    }}
                     onReset={() => {
                       setCurrentConcernData({ text: '', partnerAction: '', emotions: [], dynamicChips: FALLBACK_EMOTION_CHIPS, dynamicQuestion: null, isWritingDone: false });
                       sessionStorage.removeItem('here_concern_data');
@@ -4626,12 +4655,33 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
           </div>
         )}
       </div>
+
+      {showLimitPopup && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(5px)' }}>
+          <div style={{ width: '85%', maxWidth: '320px', backgroundColor: '#FDFBF7', borderRadius: '24px', padding: '30px 24px', textAlign: 'center', boxShadow: '0 15px 35px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🌙</div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', margin: '0 0 12px 0', color: '#3A2E2A' }}>
+              오늘은 준비된 이야기 나누기를<br/>다 이용하셨어요
+            </h3>
+            <p style={{ fontSize: '0.95rem', color: '#6B4C3B', margin: '0 0 24px 0', lineHeight: '1.6', wordBreak: 'keep-all' }}>
+              내일 다시 찾아와 주세요!<br/><br/>
+              더 깊은 이야기가 궁금하시다면 딥다이브 리포트도 준비되어 있어요.
+            </p>
+            <button
+              onClick={() => setShowLimitPopup(false)}
+              style={{ width: '100%', padding: '14px', borderRadius: '14px', border: 'none', backgroundColor: '#E2725B', color: '#FFF', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
 // H.E.R.e 다정한 식탁 (가족의 방) 결과 뷰 컴포넌트 - 5단계 전면 개편안
-function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAction, selectedEmotions = [], defenseStyle, coreNeed, trackType, formData, onReset, onGoToMyRoom, executeWithAuth }) {
+function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAction, selectedEmotions = [], defenseStyle, coreNeed, trackType, formData, onReset, onGoToMyRoom, executeWithAuth, onAnalysisSuccess }) {
   const [analysisData, setAnalysisData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showSharePreview, setShowSharePreview] = useState(false);
@@ -4652,19 +4702,29 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
         const goal = formData?.selectedGoal === 'custom' ? formData?.customGoal : formData?.selectedGoal;
         const isCouple = text.includes('남편') || text.includes('아내') || text.includes('부부') || text.includes('여보') || text.includes('배우자');
         const userName = formData?.name || '당신';
+        
+        console.log('[DEBUG-FETCH] trackType:', trackType, 'isCouple:', isCouple, 'userName:', userName);
+
         if (trackType === '나를 지키는 울타리') {
           const relationType = formData?.partnerRelation || '지인';
+          console.log('[DEBUG-FETCH] Calling fetchGeminiRelationshipAnalysis');
           data = await fetchGeminiRelationshipAnalysis(text, action, partnerName, relationType, defenseStyle, userName);
         } else if (isCouple) {
+          console.log('[DEBUG-FETCH] Calling fetchGeminiCoupleAnalysis');
           data = await fetchGeminiCoupleAnalysis(text, action, partnerName, emotionStr, goal, coreNeed, userName);
         } else {
+          console.log('[DEBUG-FETCH] Calling fetchGeminiFamilyAnalysis');
           data = await fetchGeminiFamilyAnalysis(text, action, partnerName, emotionStr, goal, coreNeed, userName);
         }
+        
         if (!ignore) {
           setAnalysisData(data);
+          if (onAnalysisSuccess && data && data.statusCode !== 'ERROR') {
+            onAnalysisSuccess();
+          }
         }
       } catch (err) {
-        console.warn('Couple Analysis API Failed:', err);
+        console.warn(`[DEBUG-FETCH] API Failed (trackType: ${trackType}):`, err);
         if (!ignore) {
           setFetchError(true);
         }
