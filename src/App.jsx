@@ -730,10 +730,16 @@ export default function App() {
 
   // ── State Persistence for Concern/Emotions ──
   const [savedConcernData, setSavedConcernData] = useState(() => {
-    const saved = sessionStorage.getItem('here_concern_data');
+    const saved = sessionStorage.getItem(`here_concern_data_비밀의 방앗간`);
     const parsed = saved ? JSON.parse(saved) : null;
     return (parsed && parsed.text) ? parsed : null;
   });
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem(`here_concern_data_${trackType}`);
+    const parsed = saved ? JSON.parse(saved) : null;
+    setSavedConcernData((parsed && parsed.text) ? parsed : null);
+  }, [trackType]);
 
   const [currentConcernData, setCurrentConcernData] = useState({
     text: '',
@@ -749,10 +755,10 @@ export default function App() {
 
   useEffect(() => {
     if (currentConcernData.text.length > 0) {
-      sessionStorage.setItem('here_concern_data', JSON.stringify(currentConcernData));
+      sessionStorage.setItem(`here_concern_data_${trackType}`, JSON.stringify(currentConcernData));
       setSavedConcernData(currentConcernData);
     }
-  }, [currentConcernData]);
+  }, [currentConcernData, trackType]);
 
   useEffect(() => {
     if (step === 'dashboard') {
@@ -1079,7 +1085,7 @@ export default function App() {
     // ── localStorage / sessionStorage 개인 데이터 클리어 ──
     localStorage.removeItem('here_my_info');
     localStorage.removeItem('Personal_Emotion_DB');
-    sessionStorage.removeItem('here_concern_data');
+                          sessionStorage.removeItem(`here_concern_data_${trackType}`);
 
     setToastMsg('로그아웃 되었습니다. 익명 모드로 계속 이용할 수 있습니다.');
     setTimeout(() => setToastMsg(''), 3000);
@@ -1328,7 +1334,7 @@ export default function App() {
 
     // API 응답 완료 후 즉시 결과 화면으로 이동 (강제 타임아웃 제거)
     setIsLoadingResult(false);
-    sessionStorage.removeItem('here_concern_data');
+                          sessionStorage.removeItem(`here_concern_data_${trackType}`);
     setSavedConcernData(null);
     setStep('result');
   };
@@ -3792,8 +3798,8 @@ export default function App() {
                           }}>
                             <span style={{ fontSize: '1.05rem', flexShrink: 0, marginTop: '2px' }}>🌿</span>
                             <p style={{ margin: 0, fontSize: '0.88rem', color: '#7A5040', lineHeight: '1.75', wordBreak: 'keep-all' }}>
-                              {currentConcernData.dynamicQuestion?.normal}<br />
-                              <strong>{currentConcernData.dynamicQuestion?.bold}</strong>
+                              {typeof currentConcernData.dynamicQuestion === 'string' ? currentConcernData.dynamicQuestion : currentConcernData.dynamicQuestion?.normal}<br />
+                              <strong>{typeof currentConcernData.dynamicQuestion === 'object' ? currentConcernData.dynamicQuestion?.bold : ''}</strong>
                             </p>
                           </div>
 
@@ -3866,7 +3872,7 @@ export default function App() {
                     setIsLoadingResult(true);
                     setTimeout(() => {
                       setIsLoadingResult(false);
-                      sessionStorage.removeItem('here_concern_data');
+                                            sessionStorage.removeItem(`here_concern_data_${trackType}`);
                       setSavedConcernData(null);
                       setStep('result');
                     }, 500); // 최소 전환 딜레이만 유지 (화면 깜빡임 방지)
@@ -3902,12 +3908,12 @@ export default function App() {
                     }}
                     onReset={() => {
                       setCurrentConcernData({ text: '', partnerAction: '', emotions: [], dynamicChips: FALLBACK_EMOTION_CHIPS, dynamicQuestion: null, isWritingDone: false });
-                      sessionStorage.removeItem('here_concern_data');
+                                            sessionStorage.removeItem(`here_concern_data_${trackType}`);
                       setStep('dashboard');
                     }}
                     onGoToMyRoom={() => {
                       setCurrentConcernData({ text: '', partnerAction: '', emotions: [], dynamicChips: FALLBACK_EMOTION_CHIPS, dynamicQuestion: null, isWritingDone: false });
-                      sessionStorage.removeItem('here_concern_data');
+                                            sessionStorage.removeItem(`here_concern_data_${trackType}`);
                       setTrackType('비밀의 방앗간');
                       setStep(formData?.name ? 'concern' : 'info');
                       window.scrollTo(0, 0);
@@ -3938,7 +3944,7 @@ export default function App() {
                               <a href="tel:1393" style={{ display: 'block', backgroundColor: '#1A2A4E', color: '#FFF', textDecoration: 'none', padding: '16px', borderRadius: '14px', fontSize: '1.05rem', fontWeight: 'bold', boxShadow: '0 4px 15px rgba(26,42,78,0.2)' }}>자살예방상담전화 1393</a>
                               <button onClick={() => {
                                 setCurrentConcernData({ text: '', partnerAction: '', emotions: [], dynamicChips: FALLBACK_EMOTION_CHIPS, dynamicQuestion: null, isWritingDone: false });
-                                sessionStorage.removeItem('here_concern_data');
+                                                      sessionStorage.removeItem(`here_concern_data_${trackType}`);
                                 setStep('dashboard');
                               }} style={{ background: 'none', border: 'none', color: '#888', marginTop: '15px', textDecoration: 'underline', fontSize: '0.9rem', cursor: 'pointer' }}>처음으로 돌아가기</button>
                             </div>
@@ -4083,7 +4089,7 @@ export default function App() {
                         </button>
                         <button style={{ ...styles.button, backgroundColor: '#AAA' }} onClick={() => {
                           setCurrentConcernData({ text: '', emotions: [], dynamicChips: FALLBACK_EMOTION_CHIPS, dynamicQuestion: null, isWritingDone: false });
-                          sessionStorage.removeItem('here_concern_data');
+                                                sessionStorage.removeItem(`here_concern_data_${trackType}`);
                           setStep('dashboard');
                           setMockFeedbackReceived(false);
                         }}>
@@ -5257,13 +5263,13 @@ function FamilyConcernInputView({ partnerName, partnerRelation, trackType, onNex
     try {
       const data = await fetchGeminiFollowUp(currentConcernData.text);
       if (data && data.question && data.chips && data.chips.length > 0) {
-        setCurrentConcernData(prev => ({ ...prev, dynamicQuestion: data.question, dynamicChips: data.chips }));
+        setCurrentConcernData(prev => ({ ...prev, dynamicQuestion: { normal: data.question, bold: '' }, dynamicChips: data.chips }));
       } else {
-        setCurrentConcernData(prev => ({ ...prev, dynamicQuestion: '이 마음과 가장 가까운 단어는 무엇인가요?', dynamicChips: ['막막함', '답답함', '서운함', '미안함', '외로움', '지침'] }));
+        setCurrentConcernData(prev => ({ ...prev, dynamicQuestion: { normal: '이 마음과 가장 가까운 단어는 무엇인가요?', bold: '' }, dynamicChips: ['막막함', '답답함', '서운함', '미안함', '외로움', '지침'] }));
       }
     } catch (err) {
       console.error('FollowUp API Failed:', err);
-      setCurrentConcernData(prev => ({ ...prev, dynamicQuestion: '지금 이 순간, 당신의 마음을 가장 잘 표현하는 단어를 골라주세요.', dynamicChips: ['막막함', '답답함', '서운함', '미안함', '외로움', '지침'] }));
+      setCurrentConcernData(prev => ({ ...prev, dynamicQuestion: { normal: '지금 이 순간, 당신의 마음을 가장 잘 표현하는 단어를 골라주세요.', bold: '' }, dynamicChips: ['막막함', '답답함', '서운함', '미안함', '외로움', '지침'] }));
     } finally {
       setIsAnalyzingEmotion(false);
     }
