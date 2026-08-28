@@ -4189,8 +4189,10 @@ export default function App() {
         )}
 
         {toastMsg && (
-          <div className="dynamic-fade-layer" style={{ position: 'fixed', bottom: '40px', left: '50%', transform: 'translateX(-50%)', backgroundColor: 'rgba(50, 50, 50, 0.95)', color: 'white', padding: '16px 24px', borderRadius: '30px', fontSize: '1rem', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', zIndex: 10001, transition: 'opacity 0.4s ease', whiteSpace: 'pre-wrap', maxWidth: '90vw', textAlign: 'center', wordBreak: 'keep-all', pointerEvents: 'none' }}>
-            {toastMsg}
+          <div style={{ position: 'fixed', bottom: '40px', left: 0, right: 0, margin: '0 auto', maxWidth: '480px', display: 'flex', justifyContent: 'center', zIndex: 10001, pointerEvents: 'none', padding: '0 20px' }}>
+            <div className="dynamic-fade-layer" style={{ backgroundColor: 'rgba(50, 50, 50, 0.95)', color: 'white', padding: '14px 24px', borderRadius: '30px', fontSize: '0.95rem', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', transition: 'opacity 0.4s ease', whiteSpace: 'pre-wrap', textAlign: 'center', wordBreak: 'keep-all' }}>
+              {toastMsg}
+            </div>
           </div>
         )}
       </div>
