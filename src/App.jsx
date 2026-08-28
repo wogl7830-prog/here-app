@@ -1317,6 +1317,7 @@ export default function App() {
           });
           const newCount = incrementDailyUsageCount();
           setToastMsg(`오늘 3회 중 ${newCount}회 사용했어요 (${MAX_DAILY_LIMIT - newCount}회 남음) 🌿`);
+          setTimeout(() => setToastMsg(''), 4000);
         }
       } catch (e) {
         console.error('[SelfAnalysis] API 실패:', e);
@@ -3897,6 +3898,7 @@ export default function App() {
                     onAnalysisSuccess={() => {
                       const newCount = incrementDailyUsageCount();
                       setToastMsg(`오늘 3회 중 ${newCount}회 사용했어요 (${MAX_DAILY_LIMIT - newCount}회 남음) 🌿`);
+                      setTimeout(() => setToastMsg(''), 4000);
                     }}
                     onReset={() => {
                       setCurrentConcernData({ text: '', partnerAction: '', emotions: [], dynamicChips: FALLBACK_EMOTION_CHIPS, dynamicQuestion: null, isWritingDone: false });
