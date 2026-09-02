@@ -25,9 +25,7 @@ export const sendPromptToGemini = async (prompt, payloadInfo = null, options = {
     }
 
     const requestBody = { prompt };
-    if (options.temperature !== undefined) {
-      requestBody.temperature = options.temperature;
-    }
+    // gemini-3.7-flash: temperature/top_p/top_k 미지원으로 제거
     if (options.maxOutputTokens !== undefined) {
       requestBody.maxOutputTokens = options.maxOutputTokens;
     }
@@ -149,7 +147,7 @@ ${recentLogStr
   "keywords": ["이번 편지에서 다룬 핵심 주제를 2~3개의 짧은 한글 키워드나 짧은 구로. 완성된 문장이 아니라 단어/짧은 구 형태로."]
 }`;
 
-  return sendPromptToGemini(prompt, null, { temperature: 0.95 });
+  return sendPromptToGemini(prompt, null, {});
 };
 
 
