@@ -4666,26 +4666,6 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
         )}
       </div>
 
-      {limitPopupTime > 0 && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(5px)' }}>
-          <div style={{ width: '85%', maxWidth: '320px', backgroundColor: '#FDFBF7', borderRadius: '24px', padding: '30px 24px', textAlign: 'center', boxShadow: '0 15px 35px rgba(0,0,0,0.2)' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🌙</div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', margin: '0 0 12px 0', color: '#3A2E2A' }}>
-              오늘은 준비된 이야기 나누기를<br/>다 이용하셨어요
-            </h3>
-            <p style={{ fontSize: '0.95rem', color: '#6B4C3B', margin: '0 0 24px 0', lineHeight: '1.6', wordBreak: 'keep-all' }}>
-              내일 다시 찾아와 주세요!<br/><br/>
-              더 깊은 이야기가 궁금하시다면 딥다이브 리포트도 준비되어 있어요.
-            </p>
-            <button
-              onClick={() => setLimitPopupTime(0)}
-              style={{ width: '100%', padding: '14px', borderRadius: '14px', border: 'none', backgroundColor: '#E2725B', color: '#FFF', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' }}
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
