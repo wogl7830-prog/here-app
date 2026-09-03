@@ -28,6 +28,9 @@ import {
   fetchGeminiRelationshipAnalysis,
   fetchGeminiSelfAnalysis,
   fetchGeminiMonthlyAnalytics,
+  fetchGeminiDeepDiveRelationship,
+  fetchGeminiDeepDiveSelf,
+  TEMP_ALWAYS_UNLOCK_PREMIUM,
 } from './services/aiEngine';
 
 // ── 사용자화(Personalization) 변수 ──
@@ -605,6 +608,9 @@ export default function App() {
   const [miniMapResult, setMiniMapResult] = useState(null);
   const [selfAnalysisResult, setSelfAnalysisResult] = useState('');
   const [aiSections, setAiSections] = useState(null); // { 마음의좌표계, 심층해석, 전문가의제안 }
+  const [selfDeepDiveData, setSelfDeepDiveData] = useState(null);
+  const [selfDeepDiveLoading, setSelfDeepDiveLoading] = useState(false);
+  const [selfDeepDiveError, setSelfDeepDiveError] = useState(false);
   const [emotionDB, setEmotionDB] = useState([]);
   const [sajuScores, setSajuScores] = useState([60, 60, 60, 60, 60]);
   const [mirroredPoints, setMirroredPoints] = useState({});
@@ -3884,6 +3890,7 @@ export default function App() {
                 <MonthlyAnalyticsView
                   userName={formData?.name || '당신'}
                   onReset={() => setStep('dashboard')}
+                  emotionDB={emotionDB}
                 />
               )}
 
@@ -4087,7 +4094,76 @@ export default function App() {
                         <button style={{ ...styles.button, backgroundColor: '#E2725B', boxShadow: '0 4px 15px rgba(226, 114, 91, 0.3)' }} onClick={handleShare}>
                           나의 기운이 머무는 '마음의 지도' 건네기
                         </button>
+
+                        {/* 나의 방 딥다이브 버튼 */}
+                        {!selfDeepDiveData && !selfDeepDiveLoading && (
+                          <button
+                            id="self-deepdive-btn"
+                            style={{ ...styles.button, backgroundColor: '#1A2A4E', boxShadow: '0 4px 15px rgba(26,42,78,0.25)' }}
+                            onClick={async () => {
+                              if (!TEMP_ALWAYS_UNLOCK_PREMIUM) return;
+                              setSelfDeepDiveLoading(true);
+                              setSelfDeepDiveError(false);
+                              try {
+                                console.log('[DEBUG-DEEPDIVE-SELF] fetchGeminiDeepDiveSelf 호출 시작');
+                                const data = await fetchGeminiDeepDiveSelf({
+                                  userName: formData?.name || '당신',
+                                  userConcern: currentConcernData.text || '',
+                                  userEmotion: (currentConcernData.emotions || []).join(', '),
+                                  mbti: formData?.mbti || '',
+                                  sajuElement: formData?.sajuElement || ''
+                                });
+                                console.log('[DEBUG-DEEPDIVE-SELF] 딥다이브 결과:', data);
+                                setSelfDeepDiveData(data);
+                              } catch (err) {
+                                console.warn('[DEBUG-DEEPDIVE-SELF] 딥다이브 API 실패:', err);
+                                setSelfDeepDiveError(true);
+                              } finally {
+                                setSelfDeepDiveLoading(false);
+                              }
+                            }}
+                          >
+                            🗝️ 내면 아이 딥다이브 리포트 보기
+                          </button>
+                        )}
+                        {selfDeepDiveLoading && (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '24px', backgroundColor: '#1A2A4E', borderRadius: '16px' }}>
+                            <div style={{ width: '32px', height: '32px', border: '3px solid rgba(253,240,230,0.2)', borderTop: '3px solid #E2725B', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                            <p style={{ color: '#A9B4D0', fontSize: '0.9rem', margin: 0, textAlign: 'center' }}>내면의 패턴을 탐구하고 있어요...</p>
+                          </div>
+                        )}
+                        {selfDeepDiveError && (
+                          <div style={{ textAlign: 'center', padding: '20px', backgroundColor: '#FFF5F0', borderRadius: '16px' }}>
+                            <p style={{ color: '#E2725B', fontSize: '0.9rem', marginBottom: '12px' }}>딥다이브 분석을 불러오지 못했어요.</p>
+                            <button onClick={() => { setSelfDeepDiveError(false); setSelfDeepDiveData(null); }} style={{ backgroundColor: '#E2725B', color: '#FFF', border: 'none', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold' }}>다시 시도</button>
+                          </div>
+                        )}
+
+                        {/* 딥다이브 결과 — 3단 아코디언 */}
+                        {selfDeepDiveData && (() => {
+                          const sections = [
+                            { emoji: '🔁', title: '내 안에서 반복되는 패턴', key: 'inner_pattern_mechanism' },
+                            { emoji: '🧒', title: '그 시절의 나를 만나기', key: 'inner_child_origin' },
+                            { emoji: '🕊️', title: '지금의 나를 다시 안아주기', key: 'healing_insight' },
+                          ];
+                          return (
+                            <div style={{ marginTop: '8px', backgroundColor: '#1A2A4E', borderRadius: '20px', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                              <h3 style={{ fontSize: '1.1rem', color: '#FDF0E6', fontWeight: '800', margin: '0 0 4px 0', textAlign: 'center', letterSpacing: '0.5px' }}>🗝️ 내면 아이 딥다이브 리포트</h3>
+                              {sections.map((sec, i) => (
+                                <div key={i} style={{ borderTop: i === 0 ? '1px solid rgba(253,240,230,0.15)' : '1px solid rgba(253,240,230,0.1)', paddingTop: '20px' }}>
+                                  <h4 style={{ fontSize: '1rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>{sec.emoji} {sec.title}</h4>
+                                  <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.9, whiteSpace: 'pre-wrap' }}>
+                                    {selfDeepDiveData[sec.key] || '...'}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+
                         <button style={{ ...styles.button, backgroundColor: '#AAA' }} onClick={() => {
+                          setSelfDeepDiveData(null);
+                          setSelfDeepDiveError(false);
                           setCurrentConcernData({ text: '', emotions: [], dynamicChips: FALLBACK_EMOTION_CHIPS, dynamicQuestion: null, isWritingDone: false });
                                                 sessionStorage.removeItem(`here_concern_data_${trackType}`);
                           setStep('dashboard');
@@ -4484,31 +4560,68 @@ const renderFormattedText = (text) => {
 };
 
 // 월간 심리 성장 리포트 뷰 컴포넌트
-function MonthlyAnalyticsView({ userName = "당신", onReset }) {
+function MonthlyAnalyticsView({ userName = '당신', onReset, emotionDB = [] }) {
   const [analysisData, setAnalysisData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // 최근 30일 emotionDB 집계 함수
+  const buildMonthlyStats = (db) => {
+    const now = Date.now();
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    const recent = (db || []).filter(entry => {
+      const ts = entry.timestamp || entry.date || 0;
+      return (now - ts) <= thirtyDays;
+    });
+    if (recent.length === 0) return null;
+    // 감정 칩별 집계
+    const counts = {};
+    recent.forEach(entry => {
+      const emotions = entry.emotions || [];
+      emotions.forEach(e => {
+        counts[e] = (counts[e] || 0) + 1;
+      });
+    });
+    const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+    const sorted = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    // 비율 계산
+    const statsStr = sorted.map(([e, c]) => `${e} ${Math.round((c / total) * 100)}%`).join(', ');
+    return { sorted, total, recent, statsStr };
+  };
+
+  // 바 차트 색상 맵 (감정 기반)
+  const EMOTION_COLORS = {
+    '평온': '#A8D8EA', '기쁨': '#B5D9A8', '설렘': '#F7C89B', '뿌듯함': '#B8E0D2',
+    '불안': '#F1AC9D', '슬픔': '#B8CEDE', '분노': '#E2725B', '억울함': '#D4A5C9',
+    '외로움': '#C4B4D4', '걱정': '#E8C9A0', '후회': '#C8BDB8', '두려움': '#D4C5A9',
+  };
+  const getEmotionColor = (name) => EMOTION_COLORS[name] || '#D0C8C0';
+
+  const stats = buildMonthlyStats(emotionDB);
+  const hasEnoughData = stats && stats.recent.length >= 3;
 
   useEffect(() => {
+    if (!hasEnoughData) return;
     let ignore = false;
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const mockMonthlyData = "평온 40%, 불안 30%, 분노 15%, 슬픔 15% (최근 1주일간 평온 증가 추세)";
-        const data = await fetchGeminiMonthlyAnalytics(userName, mockMonthlyData);
+        const data = await fetchGeminiMonthlyAnalytics(userName, stats.statsStr);
         if (!ignore) {
           setAnalysisData(data);
           setIsLoading(false);
         }
       } catch (err) {
-        console.error("Monthly analytics error:", err);
+        console.error('Monthly analytics error:', err);
         if (!ignore) {
           setAnalysisData({
             premium_monthly_analytics: {
-              monthly_theme_title: "파도를 견디며 나만의 항로를 찾아간 한 달",
-              highlight_badges: ["📉 불안 지수 30%", "📈 회복 탄력성 20% 증가"],
-              growth_evidence_data: "이번 달은 불안(30%)과 분노(15%) 칩이 존재했지만, 점차 평온(40%)의 비중이 늘어났습니다.\n\n갈등 상황에서도 스스로 통제권을 되찾는 **회복 탄력성이 지난달보다 약 20% 증가**한 건강한 신호입니다.",
-              trigger_pattern_insight: "기록을 보면 특정 요일에 '불안'이 반복되는 궤적이 보입니다.\n\n이는 피로가 누적될 때 **타인의 시선에 더 예민해지는 방어기제가 작동**하기 때문일 수 있습니다.",
-              next_month_mission: "다가오는 달에는 타인의 감정은 그 사람의 몫으로 두고, '나만의 한계선 지키기'에 집중해 보시길 권합니다."
+              monthly_theme_title: '기록이 쌓이며 나를 더 잘 알아가는 한 달',
+              highlight_badges: stats.sorted.slice(0, 2).map(([e]) => `✨ ${e}`),
+              growth_evidence_data: `${userName}의 이번 달 감정 기록이 ${stats.recent.length}개 쌓였어요.\n\n가장 자주 찾아온 감정은 '${stats.sorted[0]?.[0] || '기록 없음'}'이었습니다.`,
+              trigger_pattern_insight: '기록을 더 쌓아갈수록 무의식의 패턴이 더 선명하게 보이기 시작해요.',
+              next_month_mission: '내가 느끼는 감정을 있는 그대로 기록하는 것만으로도 충분한 자기 돌봄이 됩니다.'
             }
           });
           setIsLoading(false);
@@ -4517,10 +4630,10 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
     };
     fetchData();
     return () => { ignore = true; };
-  }, [userName]);
+  }, [hasEnoughData, userName, stats?.statsStr]);
 
   const report = analysisData?.premium_monthly_analytics || {};
-  const badges = report.highlight_badges || ["📉 불안 지수 30%", "📈 회복 탄력성 20% 증가"];
+  const badges = report.highlight_badges || [];
 
   return (
     <>
@@ -4551,25 +4664,47 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
           <div style={{ width: '24px' }} />
         </div>
 
-        {isLoading ? (
+        {/* 기록 3개 미만: 안내 화면 */}
+        {!hasEnoughData ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🌱</div>
+            <h2 style={{ fontSize: '1.3rem', color: '#4A3728', fontWeight: '800', marginBottom: '16px', wordBreak: 'keep-all', lineHeight: '1.5' }}>
+              기록이 쌓일수록<br />리포트가 더 정확해져요
+            </h2>
+            <p style={{ fontSize: '0.95rem', color: '#8A7A72', lineHeight: '1.7', marginBottom: '32px', wordBreak: 'keep-all' }}>
+              최근 30일 이내 감정 기록이 <strong>3개 이상</strong> 있어야<br />
+              {userName}만의 심리 성장 리포트를 만들 수 있어요.<br /><br />
+              현재 최근 기록: <strong>{stats?.recent.length || 0}개</strong>
+            </p>
+            <div style={{ backgroundColor: '#FFF5F0', borderRadius: '16px', padding: '20px 24px', border: '1px solid #FDE8E0', marginBottom: '32px', textAlign: 'left', width: '100%', maxWidth: '360px' }}>
+              <p style={{ fontSize: '0.9rem', color: '#6A5B53', margin: 0, lineHeight: '1.7', wordBreak: 'keep-all' }}>
+                💡 나의 방에서 감정을 기록할 때마다 이 리포트가 풍부해집니다. 오늘 하루 어떤 감정이 있었나요?
+              </p>
+            </div>
+            <button onClick={onReset} style={{ padding: '14px 28px', borderRadius: '14px', border: 'none', backgroundColor: '#E2725B', color: '#FFF', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(226,114,91,0.25)' }}>
+              나의 방에서 기록하러 가기
+            </button>
+          </div>
+
+        ) : isLoading ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px' }}>
             <div style={{ width: '50px', height: '50px', border: '3px solid rgba(226,114,91,0.2)', borderTop: '3px solid #E2725B', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '24px' }} />
             <h2 style={{ fontSize: '1.3rem', color: '#4A3728', fontWeight: '800', margin: '0 0 12px 0', textAlign: 'center' }}>
               마음의 궤적을<br />추적하고 있습니다
             </h2>
             <p style={{ fontSize: '0.95rem', color: '#8A7A72', textAlign: 'center', lineHeight: '1.6', margin: 0 }}>
-              한 달간의 감정 날씨를 모아<br />{userName} 님만의 심리 성장 리포트를 작성 중이에요...
+              {stats.recent.length}개의 기록으로<br />{userName}만의 심리 성장 리포트를 작성 중이에요...
             </p>
           </div>
         ) : (
           <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', gap: '32px', animation: 'fadeIn 0.6s ease-out' }}>
-            
+
             <div style={{ textAlign: 'center', marginBottom: '8px' }}>
               <div style={{ display: 'inline-block', backgroundColor: '#E2725B', color: '#FFF', fontSize: '0.75rem', fontWeight: 'bold', padding: '6px 12px', borderRadius: '20px', marginBottom: '16px', letterSpacing: '1px' }}>
                 H.E.R.e MONTHLY INSIGHT
               </div>
               <h2 style={{ fontSize: '1.5rem', color: '#3A2E2A', fontWeight: '800', lineHeight: '1.4', wordBreak: 'keep-all', margin: 0 }}>
-                "{report.monthly_theme_title || '파도를 견디며 나만의 항로를 찾아간 한 달'}"
+                "{report.monthly_theme_title || '이달의 마음 성장 리포트'}"
               </h2>
             </div>
 
@@ -4589,20 +4724,35 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
               <div style={{ position: 'absolute', bottom: '-5px', left: 0, right: 0, height: '40px', opacity: 0.4, animation: 'floatWave 5s ease-in-out infinite reverse' }}>
                 <svg viewBox="0 0 500 150" preserveAspectRatio="none" style={{ height: '100%', width: '100%' }}><path d="M0.00,49.98 C149.99,150.00 349.20,-49.98 500.00,49.98 L500.00,150.00 L0.00,150.00 Z" style={{ stroke: 'none', fill: '#FFF' }}></path></svg>
               </div>
-              
+
               <div style={{ position: 'relative', zIndex: 1 }}>
-                <h3 style={{ fontSize: '1.05rem', color: '#D96A53', fontWeight: '800', margin: '0 0 16px 0' }}>🌤️ 이달의 마음 기후</h3>
-                
-                {/* Visual Data Ratio Chart */}
-                <div style={{ display: 'flex', height: '24px', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }}>
-                  <div style={{ width: '40%', backgroundColor: '#A8D8EA', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1A2A4E', fontSize: '0.7rem', fontWeight: 'bold' }}>평온 40%</div>
-                  <div style={{ width: '30%', backgroundColor: '#F1AC9D', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: '0.7rem', fontWeight: 'bold' }}>불안 30%</div>
-                  <div style={{ width: '15%', backgroundColor: '#E2725B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: '0.7rem', fontWeight: 'bold' }}>분노 15%</div>
-                  <div style={{ width: '15%', backgroundColor: '#B8CEDE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1A2A4E', fontSize: '0.7rem', fontWeight: 'bold' }}>슬픔 15%</div>
+                <h3 style={{ fontSize: '1.05rem', color: '#D96A53', fontWeight: '800', margin: '0 0 8px 0' }}>🌤️ 이달의 마음 기후</h3>
+                <p style={{ fontSize: '0.8rem', color: '#9A8A82', margin: '0 0 14px 0' }}>최근 {stats.recent.length}개 기록 기반</p>
+
+                {/* 실데이터 기반 그라데이션 바차트 */}
+                <div style={{ display: 'flex', height: '28px', borderRadius: '14px', overflow: 'hidden', marginBottom: '14px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }}>
+                  {stats.sorted.map(([emo, cnt], idx) => {
+                    const pct = Math.round((cnt / stats.total) * 100);
+                    return (
+                      <div key={idx} style={{ width: `${pct}%`, backgroundColor: getEmotionColor(emo), display: 'flex', alignItems: 'center', justifyContent: 'center', color: pct < 12 ? 'transparent' : '#1A2A4E', fontSize: '0.68rem', fontWeight: 'bold', transition: 'width 0.6s ease', minWidth: '2px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        {pct >= 12 ? `${emo} ${pct}%` : ''}
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <p style={{ fontSize: '0.95rem', color: '#5A4A42', lineHeight: '1.6', margin: 0, fontWeight: '700', wordBreak: 'keep-all' }}>
-                  이번 달 {userName} 님의 마음에 가장 오래 머문 계절은 '잔잔한 바람(평온)'이었습니다.
+                {/* 범례 */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {stats.sorted.map(([emo, cnt], idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#5A4A42' }}>
+                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: getEmotionColor(emo), flexShrink: 0 }} />
+                      {emo} {Math.round((cnt / stats.total) * 100)}%
+                    </div>
+                  ))}
+                </div>
+
+                <p style={{ fontSize: '0.95rem', color: '#5A4A42', lineHeight: '1.6', margin: '14px 0 0 0', fontWeight: '700', wordBreak: 'keep-all' }}>
+                  이번 달 {userName}의 마음에 가장 오래 머문 감정은 '{stats.sorted[0]?.[0] || '기록 없음'}'이었습니다.
                 </p>
               </div>
             </div>
@@ -4612,7 +4762,7 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
                 <h3 style={{ fontSize: '1.1rem', color: '#4A3728', fontWeight: '800', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span>🔍</span> 데이터가 증명하는 '나의 성장'
                 </h3>
-                
+
                 {badges.length > 0 && (
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
                     {badges.map((b, idx) => (
@@ -4622,9 +4772,9 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
                     ))}
                   </div>
                 )}
-                
-                <div style={{ fontSize: '0.95rem', color: '#5A4A42', lineHeight: '1.7', margin: 0, wordBreak: 'keep-all', backgroundColor: '#FFF', padding: '20px', borderRadius: '16px', border: '1px solid #EAEAEA', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' }}>
-                  {renderFormattedText(report.growth_evidence_data)}
+
+                <div style={{ fontSize: '0.95rem', color: '#5A4A42', lineHeight: '1.7', margin: 0, wordBreak: 'keep-all', backgroundColor: '#FFF', padding: '20px', borderRadius: '16px', border: '1px solid #EAEAEA', boxShadow: '0 4px 15px rgba(0,0,0,0.02)', whiteSpace: 'pre-wrap' }}>
+                  {report.growth_evidence_data || '분석 데이터를 불러오는 중이에요...'}
                 </div>
               </div>
 
@@ -4632,8 +4782,8 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
                 <h3 style={{ fontSize: '1.1rem', color: '#4A3728', fontWeight: '800', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span>🛡️</span> 무의식의 트리거 찾기
                 </h3>
-                <div style={{ fontSize: '0.95rem', color: '#5A4A42', lineHeight: '1.7', margin: 0, wordBreak: 'keep-all', backgroundColor: '#FFF', padding: '20px', borderRadius: '16px', border: '1px solid #EAEAEA', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' }}>
-                  {renderFormattedText(report.trigger_pattern_insight)}
+                <div style={{ fontSize: '0.95rem', color: '#5A4A42', lineHeight: '1.7', margin: 0, wordBreak: 'keep-all', backgroundColor: '#FFF', padding: '20px', borderRadius: '16px', border: '1px solid #EAEAEA', boxShadow: '0 4px 15px rgba(0,0,0,0.02)', whiteSpace: 'pre-wrap' }}>
+                  {report.trigger_pattern_insight || '분석 데이터를 불러오는 중이에요...'}
                 </div>
               </div>
 
@@ -4642,8 +4792,8 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
                   <span>🧭</span> 다음 달의 방향성
                 </h3>
                 <div style={{ backgroundColor: '#2A3B66', padding: '20px', borderRadius: '16px', color: '#FFF', boxShadow: '0 8px 24px rgba(42,59,102,0.15)' }}>
-                  <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.7', margin: 0, wordBreak: 'keep-all', fontWeight: '700' }}>
-                    {report.next_month_mission}
+                  <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.7', margin: 0, wordBreak: 'keep-all', fontWeight: '700', whiteSpace: 'pre-wrap' }}>
+                    {report.next_month_mission || '분석 데이터를 불러오는 중이에요...'}
                   </p>
                 </div>
               </div>
@@ -4675,10 +4825,13 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
   const [analysisData, setAnalysisData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showSharePreview, setShowSharePreview] = useState(false);
-  const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false);
+  const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(TEMP_ALWAYS_UNLOCK_PREMIUM);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [fetchError, setFetchError] = useState(false);
+  const [deepDiveData, setDeepDiveData] = useState(null);
+  const [deepDiveLoading, setDeepDiveLoading] = useState(false);
+  const [deepDiveError, setDeepDiveError] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -4727,6 +4880,51 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
     fetchData();
     return () => { ignore = true; };
   }, [userConcern, partnerName]);
+
+  useEffect(() => {
+    let ignore = false;
+    const fetchDeepDive = async () => {
+      if (!isPremiumUnlocked || !analysisData || deepDiveData || deepDiveLoading) return;
+      
+      setDeepDiveLoading(true);
+      setDeepDiveError(false);
+      try {
+        console.log('[DEBUG-DEEPDIVE] fetchGeminiDeepDiveRelationship 호출 시작');
+        const text = userConcern || '';
+        const action = partnerAction || '';
+        const emotionStr = selectedEmotions.join(', ');
+        const relationType = formData?.partnerRelation || '지인';
+        const userName = formData?.name || '당신';
+
+        const data = await fetchGeminiDeepDiveRelationship({
+          userName,
+          partnerName,
+          relationshipType: trackType === '나를 지키는 울타리' ? relationType : '가족/연인',
+          userConcern: text,
+          partnerAction: action,
+          selectedEmotions: emotionStr,
+          coreNeed: coreNeed || '',
+          defenseStyle: defenseStyle || ''
+        });
+        
+        if (!ignore) {
+          console.log('[DEBUG-DEEPDIVE] 딥다이브 리포트 결과:', data);
+          setDeepDiveData(data);
+        }
+      } catch (err) {
+        console.warn('[DEBUG-DEEPDIVE] 딥다이브 리포트 API 실패:', err);
+        if (!ignore) {
+          setDeepDiveError(true);
+        }
+      } finally {
+        if (!ignore) {
+          setDeepDiveLoading(false);
+        }
+      }
+    };
+    fetchDeepDive();
+    return () => { ignore = true; };
+  }, [analysisData, isPremiumUnlocked]);
 
   if (isLoading) {
     return (
@@ -4987,166 +5185,134 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                 </div>
               </div>
 
-              {/* 💎 프리미엄 딥다이브 리포트 페이월 */}
-              <div style={{
-                backgroundColor: isPremiumUnlocked ? '#1A2A4E' : '#FFFFFF',
-                borderRadius: '24px',
-                padding: isPremiumUnlocked ? '40px 28px' : '36px 28px',
-                marginTop: '40px',
-                border: isPremiumUnlocked ? '1px solid #101B33' : '1px solid #EAEAEA',
-                boxShadow: isPremiumUnlocked ? '0 12px 40px rgba(26,42,78,0.2)' : '0 8px 30px rgba(0,0,0,0.04)',
-                position: 'relative',
-                overflow: 'hidden',
-                transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}>
-                {!isPremiumUnlocked ? (
-                  <>
-                    <h3 style={{ fontSize: '1.15rem', color: '#4A3728', fontWeight: '800', margin: '0 0 20px 0', textAlign: 'center' }}>
-                      🔒 우리 관계의 무의식적 패턴 딥다이브 분석하기
-                    </h3>
+              {/* 💎 프리미엄 딥다이브 리포트 렌더링 영역 */}
+              {isPremiumUnlocked && (
+                <div style={{
+                  backgroundColor: '#1A2A4E',
+                  borderRadius: '24px',
+                  padding: '40px 28px',
+                  marginTop: '40px',
+                  border: '1px solid #101B33',
+                  boxShadow: '0 12px 40px rgba(26,42,78,0.2)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                  animation: 'fadeInUp 0.6s ease-out forwards'
+                }}>
+                  <style>{`
+                    @keyframes fadeInUp {
+                      from { opacity: 0; transform: translateY(15px); }
+                      to { opacity: 1; transform: translateY(0); }
+                    }
+                    .scenario-accordion {
+                      transition: max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease, margin-top 0.6s ease;
+                      overflow: hidden;
+                      max-height: 0;
+                      opacity: 0;
+                      margin-top: 0;
+                    }
+                    .scenario-accordion.open {
+                      max-height: 500px;
+                      opacity: 1;
+                      margin-top: 16px;
+                    }
+                  `}</style>
+                  
+                  <h3 style={{ fontSize: '1.25rem', color: '#FDF0E6', fontWeight: '800', margin: '0 0 30px 0', textAlign: 'center', letterSpacing: '1px', borderBottom: '1px solid rgba(253,240,230,0.2)', paddingBottom: '16px' }}>
+                    🗝️ H.E.R.e 프리미엄 심층 분석
+                  </h3>
 
-                    <p style={{ fontSize: '1.05rem', color: '#E2725B', fontWeight: 'bold', lineHeight: '1.6', margin: '0 0 24px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center' }}>
-                      {mockData.premium_teaser || `${partnerName}님과의 갈등 상황에 숨겨진 무의식적 방어기제를 심층 분석합니다.`}
-                    </p>
-
-                    <div style={{ position: 'relative' }}>
-                      <p style={{ fontSize: '0.95rem', color: '#555', lineHeight: '1.8', margin: '0 0 10px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center', filter: 'blur(3px)' }}>
-                        {mockData.premium_deepdive_report?.core_conflict_mechanism || "두 사람의 기질적 차이가 어떻게 반복되는 방어기제의 충돌을 만들어내는지 심층 분석한 내용이 이곳에 표시됩니다."}
-                      </p>
-                      <p style={{ fontSize: '0.95rem', color: '#555', lineHeight: '1.8', margin: '0 0 10px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center', filter: 'blur(4px)', opacity: 0.7 }}>
-                        {mockData.premium_deepdive_report?.unconscious_projection || "상대방의 행동 아래 숨겨진 결핍이나 불안, 그리고 나의 투사에 대한 다세대적 관점의 해석이 이어집니다."}
-                      </p>
-
-                      {/* 그라데이션 오버레이 & 버튼 */}
-                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,1) 100%)', zIndex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: '10px' }}>
-                        <button
-                          onClick={() => {
-                            executeWithAuth(() => {
-                              setIsUnlocking(true);
-                              setTimeout(() => {
-                                setIsUnlocking(false);
-                                setIsPremiumUnlocked(true);
-                              }, 1000);
-                            });
-                          }}
-                          disabled={isUnlocking}
-                          style={{ backgroundColor: '#1A2A4E', color: '#FFF', border: 'none', borderRadius: '12px', padding: '16px 24px', fontSize: '1.05rem', fontWeight: 'bold', cursor: isUnlocking ? 'default' : 'pointer', transition: 'all 0.2s', boxShadow: '0 8px 24px rgba(26,42,78,0.3)', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 2, opacity: isUnlocking ? 0.8 : 1 }}
-                        >
-                          {isUnlocking ? (
-                            <>
-                              <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid #FFF', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                              잠금 해제 중...
-                            </>
-                          ) : (
-                            <>
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-                              프리미엄 리포트 열람하기
-                            </>
-                          )}
-                        </button>
-                      </div>
+                  {deepDiveLoading ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '20px 0' }}>
+                      <div style={{ width: '40px', height: '40px', border: '3px solid rgba(253,240,230,0.2)', borderTop: '3px solid #E2725B', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                      <p style={{ color: '#A9B4D0', fontSize: '0.95rem', margin: 0, textAlign: 'center' }}>두 사람 사이의 무의식적 패턴을<br/>심층 분석하고 있어요...</p>
                     </div>
-                  </>
-                ) : (
-                  <div style={{ animation: 'fadeInUp 0.6s ease-out forwards', opacity: 0 }}>
-                    <style>{`
-                      @keyframes fadeInUp {
-                        from { opacity: 0; transform: translateY(15px); }
-                        to { opacity: 1; transform: translateY(0); }
-                      }
-                      .scenario-accordion {
-                        transition: max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s ease, margin-top 0.6s ease;
-                        overflow: hidden;
-                        max-height: 0;
-                        opacity: 0;
-                        margin-top: 0;
-                      }
-                      .scenario-accordion.open {
-                        max-height: 400px;
-                        opacity: 1;
-                        margin-top: 16px;
-                      }
-                    `}</style>
-                    <h3 style={{ fontSize: '1.25rem', color: '#FDF0E6', fontWeight: '800', margin: '0 0 30px 0', textAlign: 'center', letterSpacing: '1px', borderBottom: '1px solid rgba(253,240,230,0.2)', paddingBottom: '16px' }}>
-                      🗝️ H.E.R.e 프리미엄 심층 분석
-                    </h3>
-
-                    <div style={{ marginBottom: '28px' }}>
-                      <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🧩 우리를 옭아맨 갈등의 톱니바퀴</h4>
-                      <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.9 }}>
-                        {mockData.premium_deepdive_report?.core_conflict_mechanism || "두 사람의 기질적 차이가 어떻게 반복되는 방어기제의 충돌을 만들어내는지 심층 분석한 내용이 이곳에 표시됩니다."}
-                      </p>
+                  ) : deepDiveError ? (
+                    <div style={{ textAlign: 'center', padding: '20px' }}>
+                      <p style={{ color: '#E2725B', fontSize: '1rem', marginBottom: '16px' }}>심층 분석을 불러오는데 문제가 발생했습니다.</p>
+                      <button onClick={() => setDeepDiveError(false) /* useEffect triggers again if we change state or wait */} style={{ backgroundColor: '#E2725B', color: '#FFF', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: 'bold' }}>다시 시도하기</button>
                     </div>
-
-                    <div style={{ marginBottom: '28px' }}>
-                      <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🌑 무의식의 그림자와 내면 아이</h4>
-                      <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.9 }}>
-                        {mockData.premium_deepdive_report?.unconscious_projection || "상대방의 행동 아래 숨겨진 결핍이나 불안, 그리고 나의 투사에 대한 다세대적 관점의 해석이 이어집니다."}
-                      </p>
-                    </div>
-
+                  ) : deepDiveData ? (
                     <div>
-                      <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🕯️ 치유를 향한 관계의 재구성</h4>
-                      <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.9 }}>
-                        {mockData.premium_deepdive_report?.healing_insight || "누구의 잘못도 아닌 '관계의 역동' 자체를 객관적으로 조망하게 돕고, 서로의 내면 아이를 안아주기 위한 심리학적 통찰이 제시됩니다."}
-                      </p>
-                    </div>
-
-                    {/* 실전 핑퐁 대화 시나리오 (3단계 확장판) */}
-                    <div style={{ marginTop: '40px', paddingTop: '32px', borderTop: '1px dashed rgba(253,240,230,0.2)' }}>
-                      <h4 style={{ fontSize: '1.1rem', color: '#FDF0E6', margin: '0 0 24px 0', fontWeight: '800', textAlign: 'center', letterSpacing: '0.5px' }}>💬 실전 핑퐁 대화 시나리오</h4>
-                      
-                      {/* 1단계 부드러운 선긋기 */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '28px' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#E2725B', fontWeight: 'bold', marginLeft: '12px' }}>[1단계: 부드럽게 경계선 긋기]</div>
-                        <div style={{ backgroundColor: '#2A3B66', padding: '16px 20px', borderRadius: '20px 20px 20px 4px', color: '#FFF', fontSize: '0.95rem', lineHeight: '1.65', letterSpacing: '0.2px', wordBreak: 'keep-all', whiteSpace: 'pre-wrap', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', position: 'relative' }}>
-                          {mockData.premium_scenario_expansion?.stage_1_soft_boundary || "지금은 제가 마음의 여유가 없어서, 조금 이따가 이야기하면 좋겠어요."}
-                        </div>
+                      <div style={{ marginBottom: '28px' }}>
+                        <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🧩 우리를 옭아맨 갈등의 톱니바퀴</h4>
+                        <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.9, whiteSpace: 'pre-wrap' }}>
+                          {deepDiveData.core_conflict_mechanism || "분석을 불러오지 못했습니다."}
+                        </p>
                       </div>
 
-                      {/* 예상 반응 선택 버튼 */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#A9B4D0', textAlign: 'center', marginBottom: '4px' }}>상대방의 예상 반응을 선택해 보세요 👇</div>
-                        <button 
-                          onClick={() => setSelectedScenario(selectedScenario === 'A' ? null : 'A')}
-                          style={{ padding: '14px 16px', borderRadius: '12px', border: selectedScenario === 'A' ? '1.5px solid #E2725B' : '1px solid rgba(255,255,255,0.1)', backgroundColor: selectedScenario === 'A' ? 'rgba(226,114,91,0.1)' : 'rgba(255,255,255,0.05)', color: '#FDF0E6', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left', display: 'flex', gap: '10px', alignItems: 'center' }}
-                        >
-                          <span style={{ fontSize: '1.2rem' }}>🤔</span> 
-                          <span style={{ flex: 1, lineHeight: '1.4' }}>{mockData.premium_scenario_expansion?.expected_reaction_A || "상대가 수긍하지 않고 핑계를 댈 때"}</span>
-                        </button>
-                        
-                        <button 
-                          onClick={() => setSelectedScenario(selectedScenario === 'B' ? null : 'B')}
-                          style={{ padding: '14px 16px', borderRadius: '12px', border: selectedScenario === 'B' ? '1.5px solid #E2725B' : '1px solid rgba(255,255,255,0.1)', backgroundColor: selectedScenario === 'B' ? 'rgba(226,114,91,0.1)' : 'rgba(255,255,255,0.05)', color: '#FDF0E6', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left', display: 'flex', gap: '10px', alignItems: 'center' }}
-                        >
-                          <span style={{ fontSize: '1.2rem' }}>😠</span> 
-                          <span style={{ flex: 1, lineHeight: '1.4' }}>{mockData.premium_scenario_expansion?.expected_reaction_B || "상대가 오히려 화를 내거나 비난할 때"}</span>
-                        </button>
+                      <div style={{ marginBottom: '28px' }}>
+                        <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🌑 무의식의 그림자와 내면 아이</h4>
+                        <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.9, whiteSpace: 'pre-wrap' }}>
+                          {deepDiveData.unconscious_projection || "분석을 불러오지 못했습니다."}
+                        </p>
                       </div>
 
-                      {/* 시나리오 A 결과 */}
-                      <div className={`scenario-accordion ${selectedScenario === 'A' ? 'open' : ''}`}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ fontSize: '0.8rem', color: '#E2725B', fontWeight: 'bold', marginLeft: '12px' }}>[2단계: 쿠션어 대처]</div>
-                          <div style={{ backgroundColor: '#3A4C7A', padding: '16px 20px', borderRadius: '20px 20px 20px 4px', color: '#FFF', fontSize: '0.95rem', lineHeight: '1.65', letterSpacing: '0.2px', wordBreak: 'keep-all', whiteSpace: 'pre-wrap', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', position: 'relative' }}>
-                            {mockData.premium_scenario_expansion?.stage_2_cushion_response || "그렇게 생각할 수 있다는 건 알아요. 하지만 지금은 제 마음을 추스르는 게 먼저라서요."}
+                      <div>
+                        <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🕯️ 치유를 향한 관계의 재구성</h4>
+                        <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.9, whiteSpace: 'pre-wrap' }}>
+                          {deepDiveData.healing_insight || "분석을 불러오지 못했습니다."}
+                        </p>
+                      </div>
+
+                      {/* 실전 핑퐁 대화 시나리오 (가족의 방, 부부의 방일 때만 표시) */}
+                      {deepDiveData.premium_scenario_expansion && Object.keys(deepDiveData.premium_scenario_expansion).length > 0 && (
+                        <div style={{ marginTop: '40px', paddingTop: '32px', borderTop: '1px dashed rgba(253,240,230,0.2)' }}>
+                          <h4 style={{ fontSize: '1.1rem', color: '#FDF0E6', margin: '0 0 24px 0', fontWeight: '800', textAlign: 'center', letterSpacing: '0.5px' }}>💬 실전 핑퐁 대화 시나리오</h4>
+                          
+                          {/* 1단계 부드러운 선긋기 */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '28px' }}>
+                            <div style={{ fontSize: '0.8rem', color: '#E2725B', fontWeight: 'bold', marginLeft: '12px' }}>[1단계: 방어기제를 내려놓는 오프닝]</div>
+                            <div style={{ backgroundColor: '#2A3B66', padding: '16px 20px', borderRadius: '20px 20px 20px 4px', color: '#FFF', fontSize: '0.95rem', lineHeight: '1.65', letterSpacing: '0.2px', wordBreak: 'keep-all', whiteSpace: 'pre-wrap', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', position: 'relative' }}>
+                              {deepDiveData.premium_scenario_expansion.stage_1_soft_boundary || "오류가 발생했습니다."}
+                            </div>
+                          </div>
+
+                          {/* 예상 반응 선택 버튼 */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ fontSize: '0.8rem', color: '#A9B4D0', textAlign: 'center', marginBottom: '4px' }}>상대방의 예상 반응을 선택해 보세요 👇</div>
+                            <button 
+                              onClick={() => setSelectedScenario(selectedScenario === 'A' ? null : 'A')}
+                              style={{ padding: '14px 16px', borderRadius: '12px', border: selectedScenario === 'A' ? '1.5px solid #E2725B' : '1px solid rgba(255,255,255,0.1)', backgroundColor: selectedScenario === 'A' ? 'rgba(226,114,91,0.1)' : 'rgba(255,255,255,0.05)', color: '#FDF0E6', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left', display: 'flex', gap: '10px', alignItems: 'center' }}
+                            >
+                              <span style={{ fontSize: '1.2rem' }}>🤔</span> 
+                              <span style={{ flex: 1, lineHeight: '1.4' }}>{deepDiveData.premium_scenario_expansion.expected_reaction_A || "수긍하지 않고 핑계를 댈 때"}</span>
+                            </button>
+                            
+                            <button 
+                              onClick={() => setSelectedScenario(selectedScenario === 'B' ? null : 'B')}
+                              style={{ padding: '14px 16px', borderRadius: '12px', border: selectedScenario === 'B' ? '1.5px solid #E2725B' : '1px solid rgba(255,255,255,0.1)', backgroundColor: selectedScenario === 'B' ? 'rgba(226,114,91,0.1)' : 'rgba(255,255,255,0.05)', color: '#FDF0E6', fontSize: '0.9rem', cursor: 'pointer', transition: 'all 0.2s', textAlign: 'left', display: 'flex', gap: '10px', alignItems: 'center' }}
+                            >
+                              <span style={{ fontSize: '1.2rem' }}>😠</span> 
+                              <span style={{ flex: 1, lineHeight: '1.4' }}>{deepDiveData.premium_scenario_expansion.expected_reaction_B || "오히려 화를 내거나 비난할 때"}</span>
+                            </button>
+                          </div>
+
+                          {/* 시나리오 A 결과 */}
+                          <div className={`scenario-accordion ${selectedScenario === 'A' ? 'open' : ''}`}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ fontSize: '0.8rem', color: '#E2725B', fontWeight: 'bold', marginLeft: '12px' }}>[2단계: 핵심 욕구 전달]</div>
+                              <div style={{ backgroundColor: '#3A4C7A', padding: '16px 20px', borderRadius: '20px 20px 20px 4px', color: '#FFF', fontSize: '0.95rem', lineHeight: '1.65', letterSpacing: '0.2px', wordBreak: 'keep-all', whiteSpace: 'pre-wrap', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', position: 'relative' }}>
+                                {deepDiveData.premium_scenario_expansion.stage_2_cushion_response || "오류가 발생했습니다."}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 시나리오 B 결과 */}
+                          <div className={`scenario-accordion ${selectedScenario === 'B' ? 'open' : ''}`}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ fontSize: '0.8rem', color: '#E2725B', fontWeight: 'bold', marginLeft: '12px' }}>[3단계: 재연결을 위한 단호한 제안]</div>
+                              <div style={{ backgroundColor: '#E2725B', padding: '16px 20px', borderRadius: '20px 20px 20px 4px', color: '#FFF', fontSize: '0.95rem', lineHeight: '1.65', letterSpacing: '0.2px', wordBreak: 'keep-all', whiteSpace: 'pre-wrap', boxShadow: '0 4px 15px rgba(226,114,91,0.3)', position: 'relative' }}>
+                                {deepDiveData.premium_scenario_expansion.stage_3_firm_timeout || "오류가 발생했습니다."}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-
-                      {/* 시나리오 B 결과 */}
-                      <div className={`scenario-accordion ${selectedScenario === 'B' ? 'open' : ''}`}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ fontSize: '0.8rem', color: '#E2725B', fontWeight: 'bold', marginLeft: '12px' }}>[3단계: 단호한 I-Message]</div>
-                          <div style={{ backgroundColor: '#E2725B', padding: '16px 20px', borderRadius: '20px 20px 20px 4px', color: '#FFF', fontSize: '0.95rem', lineHeight: '1.65', letterSpacing: '0.2px', wordBreak: 'keep-all', whiteSpace: 'pre-wrap', boxShadow: '0 4px 15px rgba(226,114,91,0.3)', position: 'relative' }}>
-                            {mockData.premium_scenario_expansion?.stage_3_firm_timeout || "그렇게 큰 소리로 말씀하시면 대화하기 어렵습니다. 진정되시면 다시 이야기해요."}
-                          </div>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
+                  ) : null}
+                </div>
+              )}
 
               {/* 카톡 공유 프리뷰 모달 */}
               {showSharePreview && (
