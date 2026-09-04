@@ -5293,7 +5293,14 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                               <div style={{ fontSize: '0.8rem', color: '#E2725B', fontWeight: 'bold', marginLeft: '12px' }}>[2단계: 핵심 욕구 전달]</div>
                               <div style={{ backgroundColor: '#3A4C7A', padding: '16px 20px', borderRadius: '20px 20px 20px 4px', color: '#FFF', fontSize: '0.95rem', lineHeight: '1.65', letterSpacing: '0.2px', wordBreak: 'keep-all', whiteSpace: 'pre-wrap', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', position: 'relative' }}>
-                                {deepDiveData.premium_scenario_expansion.stage_2_cushion_response || "오류가 발생했습니다."}
+                                {typeof deepDiveData.premium_scenario_expansion?.stage_2_cushion_response === 'object' ? (
+                                  <>
+                                    <div style={{ marginBottom: '8px', color: '#A9B4D0' }}>💡 상대가 이렇게 반응할 수도 있어요:<br/><span style={{ color: '#FFF' }}>{deepDiveData.premium_scenario_expansion.stage_2_cushion_response.expected_reaction_A}</span></div>
+                                    <div style={{ color: '#A9B4D0' }}>🗣️ 그럴 땐 이렇게 대처해보세요:<br/><span style={{ color: '#FFF' }}>{deepDiveData.premium_scenario_expansion.stage_2_cushion_response.response}</span></div>
+                                  </>
+                                ) : (
+                                  deepDiveData.premium_scenario_expansion?.stage_2_cushion_response || "오류가 발생했습니다."
+                                )}
                               </div>
                             </div>
                           </div>
@@ -5303,7 +5310,14 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                               <div style={{ fontSize: '0.8rem', color: '#E2725B', fontWeight: 'bold', marginLeft: '12px' }}>[3단계: 재연결을 위한 단호한 제안]</div>
                               <div style={{ backgroundColor: '#E2725B', padding: '16px 20px', borderRadius: '20px 20px 20px 4px', color: '#FFF', fontSize: '0.95rem', lineHeight: '1.65', letterSpacing: '0.2px', wordBreak: 'keep-all', whiteSpace: 'pre-wrap', boxShadow: '0 4px 15px rgba(226,114,91,0.3)', position: 'relative' }}>
-                                {deepDiveData.premium_scenario_expansion.stage_3_firm_timeout || "오류가 발생했습니다."}
+                                {typeof deepDiveData.premium_scenario_expansion?.stage_3_firm_timeout === 'object' ? (
+                                  <>
+                                    <div style={{ marginBottom: '8px', color: 'rgba(255,255,255,0.8)' }}>💡 상대가 이렇게 반응할 수도 있어요:<br/><span style={{ color: '#FFF' }}>{deepDiveData.premium_scenario_expansion.stage_3_firm_timeout.expected_reaction_B}</span></div>
+                                    <div style={{ color: 'rgba(255,255,255,0.8)' }}>🗣️ 그럴 땐 이렇게 대처해보세요:<br/><span style={{ color: '#FFF' }}>{deepDiveData.premium_scenario_expansion.stage_3_firm_timeout.response}</span></div>
+                                  </>
+                                ) : (
+                                  deepDiveData.premium_scenario_expansion?.stage_3_firm_timeout || "오류가 발생했습니다."
+                                )}
                               </div>
                             </div>
                           </div>
