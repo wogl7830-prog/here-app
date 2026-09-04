@@ -713,7 +713,7 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState('');
 
   // -- Daily Limit Logic --
-  const MAX_DAILY_LIMIT = 3;
+  const MAX_DAILY_LIMIT = 999; // [TEMP] 테스트 기간 동안 횟수 제한 무력화 (기존 3회)
   const [limitPopupTime, setLimitPopupTime] = useState(0);
   const getTodayKey = () => {
     const d = new Date();
@@ -3871,17 +3871,17 @@ export default function App() {
                   setCurrentConcernData={setCurrentConcernData}
                   savedConcernData={savedConcernData}
                   onNext={() => {
+                    console.log('[DEBUG] onNext clicked! - Transitioning to result step');
                     if (getDailyUsageCount() >= MAX_DAILY_LIMIT) {
+                      console.log('[DEBUG] Daily limit reached.');
                       setLimitPopupTime(Date.now());
                       return;
                     }
-                    setIsLoadingResult(true);
-                    setTimeout(() => {
-                      setIsLoadingResult(false);
-                                            sessionStorage.removeItem(`here_concern_data_${trackType}`);
-                      setSavedConcernData(null);
-                      setStep('result');
-                    }, 500); // 최소 전환 딜레이만 유지 (화면 깜빡임 방지)
+                    // 로딩 상태를 짧게 깜빡이지 않고, 즉시 결과 화면(컴포넌트 렌더링)으로 진입시켜서 
+                    // 결과 화면 자체의 로딩 UI를 타게 합니다. (Silent Failure 방지)
+                    sessionStorage.removeItem(`here_concern_data_${trackType}`);
+                    setSavedConcernData(null);
+                    setStep('result');
                   }}
                 />
               )}
@@ -4825,13 +4825,16 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
   const [analysisData, setAnalysisData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showSharePreview, setShowSharePreview] = useState(false);
-  const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(TEMP_ALWAYS_UNLOCK_PREMIUM);
+  const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [fetchError, setFetchError] = useState(false);
   const [deepDiveData, setDeepDiveData] = useState(null);
   const [deepDiveLoading, setDeepDiveLoading] = useState(false);
   const [deepDiveError, setDeepDiveError] = useState(false);
+
+  const relationType = trackType === '나를 지키는 울타리' ? (formData?.partnerRelation || '지인') : '가족/연인';
+  const isCloseRelation = relationType && (relationType.includes('부부') || relationType.includes('연인') || relationType.includes('가족') || relationType.includes('배우자'));
 
   useEffect(() => {
     let ignore = false;
@@ -4981,6 +4984,28 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
       </div>
     );
   }
+  const hasMapData = mockData?.map_data && typeof mockData.map_data.user?.x === 'number' && typeof mockData.map_data.partner?.x === 'number';
+  
+  // 1. 데이터가 없을 경우를 대비한 폴백 좌표 (-1.0 ~ 1.0 스케일)
+  let userX = hasMapData ? mockData.map_data.user.x : -0.4;
+  let userY = hasMapData ? mockData.map_data.user.y : -0.2;
+  let partnerX = hasMapData ? mockData.map_data.partner.x : 0.4;
+  let partnerY = hasMapData ? mockData.map_data.partner.y : 0.2;
+
+  // 겹침 방지 (소수점 스케일이므로 아주 약간만 띄움)
+  if (userX === partnerX && userY === partnerY) {
+    userX -= 0.05;
+    partnerX += 0.05;
+  }
+
+  // 3. 토스페이먼츠 결제 모킹 함수
+  const handlePayment = () => {
+    if (TEMP_ALWAYS_UNLOCK_PREMIUM) {
+      setIsPremiumUnlocked(true);
+    } else {
+      alert('토스페이먼츠 결제창 호출을 준비 중입니다.');
+    }
+  };
 
   return (
     <div style={{
@@ -5041,64 +5066,68 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
               </p>
             </div>
           ) : (
-            <div style={{ position: 'relative', width: '100%', maxWidth: '340px', margin: '0 auto', aspectRatio: '1', backgroundColor: '#FFF', borderRadius: '50%', border: '1px solid #EAEAEA', boxShadow: '0 10px 30px rgba(0,0,0,0.02)' }}>
-              {/* 십자축 */}
-              <div style={{ position: 'absolute', top: '50%', left: '0', right: '0', height: '1px', backgroundColor: '#F0F0F0' }} />
-              <div style={{ position: 'absolute', top: '0', bottom: '0', left: '50%', width: '1px', backgroundColor: '#F0F0F0' }} />
-
-              {/* 축 라벨 — 감성적 키워드 */}
-              <span style={{ position: 'absolute', top: '14px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.62rem', color: '#A0A0A0', letterSpacing: '1px', fontFamily: 'sans-serif', whiteSpace: 'nowrap' }}>다시 연결되고 싶어</span>
-              <span style={{ position: 'absolute', bottom: '14px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.62rem', color: '#A0A0A0', letterSpacing: '1px', fontFamily: 'sans-serif', whiteSpace: 'nowrap' }}>나를 보호하고 싶어</span>
-              <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%) rotate(-90deg)', fontSize: '0.62rem', color: '#A0A0A0', letterSpacing: '1px', fontFamily: 'sans-serif', whiteSpace: 'nowrap' }}>혼자 삼키는 중</span>
-              <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%) rotate(90deg)', fontSize: '0.62rem', color: '#A0A0A0', letterSpacing: '1px', fontFamily: 'sans-serif', whiteSpace: 'nowrap' }}>알아달라 외치는 중</span>
-
-              {/* 점선 연결선 (SVG) */}
-              <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-                <line
-                  x1={`${50 + ((mockData.map_data?.user?.x || 0) / 2)}%`}
-                  y1={`${50 - ((mockData.map_data?.user?.y || 0) / 2)}%`}
-                  x2={`${50 + ((mockData.map_data?.partner?.x || 0) / 2)}%`}
-                  y2={`${50 - ((mockData.map_data?.partner?.y || 0) / 2)}%`}
-                  stroke="#D8D8D8" strokeWidth="1.5" strokeDasharray="4 4"
-                />
-              </svg>
-
-              {/* 다정한 첫 마디 배지 (중앙) */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {/* 다정한 첫 마디 배지 (그래프 위쪽으로 이동) */}
               <div style={{
-                position: 'absolute',
-                left: `${50 + ((mockData.map_data?.user?.x || 0) / 2 + (mockData.map_data?.partner?.x || 0) / 2) / 2}%`,
-                top: `${50 - ((mockData.map_data?.user?.y || 0) / 2 + (mockData.map_data?.partner?.y || 0) / 2) / 2}%`,
-                transform: 'translate(-50%, -50%)',
                 zIndex: 3,
                 backgroundColor: '#FFFFFF',
                 border: '1.5px solid #E2725B',
                 borderRadius: '20px',
-                padding: '6px 12px',
+                padding: '8px 16px',
                 boxShadow: '0 4px 12px rgba(226,114,91,0.15)',
-                fontSize: '0.75rem',
+                fontSize: '0.85rem',
                 color: '#E2725B',
                 fontWeight: 'bold',
-                whiteSpace: 'nowrap'
+                textAlign: 'center',
+                marginBottom: '20px'
               }}>
                 {mockData.statusStatement || '각자의 동굴 속에서 잠시 숨을 고르고 있네요.'}
               </div>
 
-              {/* User Dot */}
-              <div style={{ position: 'absolute', left: `${50 + ((mockData.map_data?.user?.x || 0) / 2)}%`, top: `${50 - ((mockData.map_data?.user?.y || 0) / 2)}%`, transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
-                <div style={{ width: '13px', height: '13px', borderRadius: '50%', backgroundColor: '#2C3E50', boxShadow: '0 0 0 4px rgba(44,62,80,0.15)' }} />
-                <span style={{ marginTop: '6px', fontSize: '0.65rem', color: '#FFF', backgroundColor: '#2C3E50', padding: '2px 7px', borderRadius: '10px', fontFamily: 'sans-serif', fontWeight: '700', whiteSpace: 'nowrap' }}>
-                  {formData?.name || '나'}
-                </span>
-              </div>
+              <div style={{ position: 'relative', width: '100%', maxWidth: '340px', margin: '0 auto', aspectRatio: '1', backgroundColor: '#FFF', borderRadius: '50%', border: '1px solid #EAEAEA', boxShadow: '0 10px 30px rgba(0,0,0,0.02)' }}>
+                {/* 십자축 */}
+                <div style={{ position: 'absolute', top: '50%', left: '0', right: '0', height: '1px', backgroundColor: '#F0F0F0' }} />
+                <div style={{ position: 'absolute', top: '0', bottom: '0', left: '50%', width: '1px', backgroundColor: '#F0F0F0' }} />
 
-              {/* Partner Dot */}
-              <div style={{ position: 'absolute', left: `${50 + ((mockData.map_data?.partner?.x || 0) / 2)}%`, top: `${50 - ((mockData.map_data?.partner?.y || 0) / 2)}%`, transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
-                <div style={{ width: '13px', height: '13px', borderRadius: '50%', backgroundColor: '#8B4513', boxShadow: '0 0 0 4px rgba(139,69,19,0.15)' }} />
-                <span style={{ marginTop: '6px', fontSize: '0.65rem', color: '#FFF', backgroundColor: '#8B4513', padding: '2px 7px', borderRadius: '10px', fontFamily: 'sans-serif', fontWeight: '700', whiteSpace: 'nowrap' }}>
-                  {partnerName}
-                </span>
-              </div>
+                {/* 축 라벨 — 감성적 키워드 */}
+                <span style={{ position: 'absolute', top: '14px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.62rem', color: '#A0A0A0', letterSpacing: '1px', fontFamily: 'sans-serif', whiteSpace: 'nowrap' }}>다시 연결되고 싶어</span>
+                <span style={{ position: 'absolute', bottom: '14px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.62rem', color: '#A0A0A0', letterSpacing: '1px', fontFamily: 'sans-serif', whiteSpace: 'nowrap' }}>나를 보호하고 싶어</span>
+                <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.62rem', color: '#A0A0A0', letterSpacing: '1px', fontFamily: 'sans-serif', textAlign: 'center', lineHeight: '1.4' }}>혼자<br/>삼키는 중</span>
+                <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.62rem', color: '#A0A0A0', letterSpacing: '1px', fontFamily: 'sans-serif', textAlign: 'center', lineHeight: '1.4' }}>알아달라<br/>외치는 중</span>
+
+                {/* 점선 연결선 및 마커 */}
+                {/* 점선 연결선 및 마커 */}
+                {true && (
+                  <>
+                    <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+                      <line
+                        x1={`${50 + (userX * 40)}%`}
+                        y1={`${50 - (userY * 40)}%`}
+                        x2={`${50 + (partnerX * 40)}%`}
+                        y2={`${50 - (partnerY * 40)}%`}
+                        stroke="#D8D8D8" strokeWidth="1.5" strokeDasharray="4 4"
+                      />
+                    </svg>
+
+                    {/* User Dot */}
+                    <div style={{ position: 'absolute', left: `${50 + (userX * 40)}%`, top: `${50 - (userY * 40)}%`, transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 3 }}>
+                      <div style={{ width: '13px', height: '13px', borderRadius: '50%', backgroundColor: '#2C3E50', border: '2px solid #FFF', boxShadow: '0 0 0 3px rgba(44,62,80,0.15)' }} />
+                      <span style={{ marginTop: '8px', fontSize: '0.65rem', color: '#FFF', backgroundColor: '#2C3E50', padding: '3px 8px', borderRadius: '12px', fontFamily: 'sans-serif', fontWeight: '700', whiteSpace: 'nowrap', border: '1.5px solid #FFF', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+                        {formData?.name || '나'}
+                      </span>
+                    </div>
+
+                    {/* Partner Dot */}
+                    <div style={{ position: 'absolute', left: `${50 + (partnerX * 40)}%`, top: `${50 - (partnerY * 40)}%`, transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 4 }}>
+                      <div style={{ width: '13px', height: '13px', borderRadius: '50%', backgroundColor: '#8B4513', border: '2px solid #FFF', boxShadow: '0 0 0 3px rgba(139,69,19,0.15)' }} />
+                      <span style={{ marginTop: '8px', fontSize: '0.65rem', color: '#FFF', backgroundColor: '#8B4513', padding: '3px 8px', borderRadius: '12px', fontFamily: 'sans-serif', fontWeight: '700', whiteSpace: 'nowrap', border: '1.5px solid #FFF', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+                        {partnerName}
+                      </span>
+                    </div>
+                  </>
+                )}
             </div>
+          </div>
           )}
         </div>
 
@@ -5185,13 +5214,27 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                 </div>
               </div>
 
+              {/* 상대방을 향한 작은 창문 (결제 훅을 위해 위치 이동) */}
+              <div style={{ backgroundColor: '#FAF7F5', borderRadius: '20px', padding: '32px 26px 26px 26px', marginTop: '30px', border: '1px solid #F3ECE8', position: 'relative', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.01)' }}>
+                <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#F3ECE8', color: '#9E8071', fontSize: '0.8rem', fontWeight: 'bold', padding: '6px 14px', borderRadius: '20px', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                  {partnerName}{isCloseRelation ? '' : '님'}의 마음 창문
+                </div>
+                <p style={{ fontSize: '0.98rem', color: '#6A5B53', lineHeight: '1.8', margin: '0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', fontStyle: 'italic', textAlign: 'center' }}>
+                  {mockData.partnerWindow || "상대방도 사실은 관계가 끊어질까 봐 두려워 웅크리고 있는 것일지도 모릅니다. 지금의 침묵은 서툰 보호막일 뿐이에요."}
+                </p>
+                {/* 프리미엄 잠금 시 Fade-out 그라데이션 블러 효과 */}
+                {!isPremiumUnlocked && (
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60px', pointerEvents: 'none', background: 'linear-gradient(to bottom, rgba(250, 247, 245, 0) 0%, rgba(250, 247, 245, 1) 100%)' }}></div>
+                )}
+              </div>
+
               {/* 💎 프리미엄 딥다이브 리포트 렌더링 영역 */}
-              {isPremiumUnlocked && (
+              {isPremiumUnlocked ? (
                 <div style={{
                   backgroundColor: '#1A2A4E',
                   borderRadius: '24px',
                   padding: '40px 28px',
-                  marginTop: '40px',
+                  marginTop: '16px',
                   border: '1px solid #101B33',
                   boxShadow: '0 12px 40px rgba(26,42,78,0.2)',
                   position: 'relative',
@@ -5326,7 +5369,27 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                     </div>
                   ) : null}
                 </div>
+              ) : (
+                <div style={{ position: 'relative', marginTop: '16px', padding: '40px 20px', borderRadius: '24px', backgroundColor: '#1A2A4E', overflow: 'hidden', textAlign: 'center', boxShadow: '0 10px 30px rgba(26,42,78,0.1)' }}>
+                  <div style={{ position: 'relative', zIndex: 2 }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>🔒</div>
+                    <h3 style={{ fontSize: '1.25rem', color: '#FFF', fontWeight: '800', marginBottom: '12px' }}>
+                      프리미엄 딥다이브 리포트
+                    </h3>
+                    <p style={{ fontSize: '0.95rem', color: '#A9B4D0', lineHeight: '1.6', marginBottom: '24px', wordBreak: 'keep-all' }}>
+                      갈등의 근본 원인과 무의식적 패턴, <br />치유를 위한 실전 대화 시나리오를 확인하세요.
+                    </p>
+                    <button
+                      onClick={handlePayment}
+                      style={{ backgroundColor: '#E2725B', color: '#FFF', border: 'none', borderRadius: '12px', padding: '14px 28px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(226,114,91,0.3)' }}
+                    >
+                      딥다이브 리포트 보기
+                    </button>
+                  </div>
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(180deg, rgba(26,42,78,0) 0%, #1A2A4E 100%)', zIndex: 1, backdropFilter: 'blur(10px)' }}></div>
+                </div>
               )}
+            </div>
 
               {/* 카톡 공유 프리뷰 모달 */}
               {showSharePreview && (
@@ -5335,7 +5398,7 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                     {/* 헤더 */}
                     <div style={{ padding: '20px', textAlign: 'center', borderBottom: '1px solid #F0F0F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ width: '24px' }}></div>
-                      <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#333', fontWeight: '800' }}>{partnerName}에게 전할 마음 레시피</h3>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#333', fontWeight: '800' }}>{partnerName}{isCloseRelation ? '에게' : '님에게'} 전할 마음 레시피</h3>
                       <button onClick={() => setShowSharePreview(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: '#999', cursor: 'pointer', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>&times;</button>
                     </div>
 
@@ -5373,16 +5436,6 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                 </div>
               )}
 
-              {/* 상대방을 향한 작은 창문 */}
-              <div style={{ backgroundColor: '#FAF7F5', borderRadius: '20px', padding: '32px 26px 26px 26px', marginTop: '30px', border: '1px solid #F3ECE8', position: 'relative', boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.01)' }}>
-                <div style={{ position: 'absolute', top: '-14px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#F3ECE8', color: '#9E8071', fontSize: '0.8rem', fontWeight: 'bold', padding: '6px 14px', borderRadius: '20px', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
-                  {partnerName}님의 마음 창문
-                </div>
-                <p style={{ fontSize: '0.98rem', color: '#6A5B53', lineHeight: '1.8', margin: '0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', fontStyle: 'italic', textAlign: 'center' }}>
-                  {mockData.partnerWindow || "상대방도 사실은 관계가 끊어질까 봐 두려워 웅크리고 있는 것일지도 모릅니다. 지금의 침묵은 서툰 보호막일 뿐이에요."}
-                </p>
-              </div>
-            </div>
           </>
         )}
 
@@ -5623,9 +5676,15 @@ function FamilyConcernInputView({ partnerName, partnerRelation, trackType, onNex
             </div>
           ) : (
             <div style={{ padding: '24px 0 0 0', borderTop: '1px solid #F3ECE6', marginTop: '15px' }}>
-              <p style={{ fontSize: '0.95rem', color: '#6B4C3B', textAlign: 'center', marginBottom: '20px', lineHeight: '1.5', fontWeight: 'bold' }}>
-                {typeof currentConcernData.dynamicQuestion === 'object' ? currentConcernData.dynamicQuestion.bold : currentConcernData.dynamicQuestion}
-                <span style={{ display: 'block', fontSize: '0.8rem', color: '#A38B7D', fontWeight: 'normal', marginTop: '4px' }}>(최대 2개 선택)</span>
+              <p style={{ fontSize: '0.95rem', color: '#6B4C3B', textAlign: 'center', marginTop: '24px', marginBottom: '16px', lineHeight: '1.5', fontWeight: 'bold', wordBreak: 'keep-all' }}>
+                {(() => {
+                  let qText = currentConcernData.dynamicQuestion;
+                  if (typeof qText === 'object' && qText !== null) {
+                    qText = qText.normal || qText.bold;
+                  }
+                  return qText || "이렇게 솔직하게 꺼내어 주셔서 감사해요. 지금 내 마음과 가장 가까운 감정을 골라볼까요?";
+                })()}
+                <span style={{ display: 'block', fontSize: '0.8rem', color: '#A38B7D', fontWeight: 'normal', marginTop: '8px' }}>(최대 2개 선택)</span>
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
                 {currentConcernData.dynamicChips.map((chip, idx) => (
@@ -5709,10 +5768,10 @@ function FamilyConcernInputView({ partnerName, partnerRelation, trackType, onNex
         )}
 
         {/* 관계의 지도 열기 / 처방전 받기 버튼 */}
-        <div className={`done-btn-wrap ${isNextBtnVisible && !isAnalyzingEmotion ? 'visible' : 'hidden'}`}>
+        <div className={`done-btn-wrap ${isNextBtnVisible && !isAnalyzingEmotion ? 'visible' : 'hidden'}`} style={{ position: 'relative', zIndex: 9999, pointerEvents: 'auto' }}>
           <button
             onClick={onNext}
-            style={{ position: 'relative', zIndex: 2, width: '100%', padding: '18px', backgroundColor: '#E2725B', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.3s' }}
+            style={{ position: 'relative', zIndex: 9999, width: '100%', padding: '18px', backgroundColor: '#E2725B', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', pointerEvents: 'auto', transition: 'all 0.3s', boxShadow: '0 4px 20px rgba(226,114,91,0.3)' }}
           >
             {trackType === '나를 지키는 울타리' ? '나를 지키는 처방전 받기' : '관계의 지도 열기'}
           </button>

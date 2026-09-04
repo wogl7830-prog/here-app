@@ -8,6 +8,12 @@
 
 import { getAuthToken } from '../firebase';
 
+// [TEMP] 결제 검증 완성 전까지 프리미엄 콘텐츠를 임시로 항상 언락 상태로 둡니다.
+// TODO: 결제 검증(server.js의 결제 승인 API + Firestore users/{uid} 기록)이 완성되면
+// 아래 값을 실제 결제 상태 확인 로직으로 교체할 것.
+// 참조 위치를 바꿀 때는 이 파일의 이 줄 하나만 수정하면 됩니다.
+export const TEMP_ALWAYS_UNLOCK_PREMIUM = true;
+
 const BASE_URL = 'https://here-backend-pt4t.onrender.com/api/chat';
 
 // 공통 Fetch 헬퍼 함수 (중복되는 fetch 및 JSON 파싱 에러 방어 처리)
@@ -195,8 +201,9 @@ export const fetchGeminiRelationshipAnalysisV2 = async ({
 당신은 '자연 기질론'과 서양 심리학의 'EFT(정서중심 부부치료)', '이마고(Imago) 부부/가족 치료', '사티어(Satir) 의사소통 유형'을 결합한 세계 최고의 하이브리드 관계 코칭 전문가입니다.
 
 ### [Context Input]
+- 내담자(유저) 이름: "${userName}"
 - 내담자(유저) 정보: 성향(${userMbti}), 타고난 기질(${userElement})
-- 대상자(상대방) 정보: 관계(${relationshipType}), 성향(${partnerMbti}), 타고난 기질(${partnerElement})
+- 대상자(상대방) 정보: 관계(${relationshipType}), 이름(${partnerName}), 성향(${partnerMbti}), 타고난 기질(${partnerElement})
 - 현재 상황: 내담자 고민(${userConcern}) / 상대의 행동(${partnerAction})
 - 내담자의 핵심 욕구: "${coreNeed}"
 
@@ -210,7 +217,8 @@ export const fetchGeminiRelationshipAnalysisV2 = async ({
    - 동시에 내담자가 왜 그 행동에 유독 깊은 상처를 받았는지(치열한 노력, 자립심, 혹은 존재 가치의 훼손 등)를 깊이 공감하고 수용해 주세요.
 
 2. 문체 및 호칭 (Crucial!)
-   - 절대 '유저', '유저님', '사용자'라는 단어를 사용하지 마세요. 내담자를 지칭할 때는 2인칭 주어인 '당신' 또는 '그대'로 우아하게 대체해 주세요.
+   - 절대 '유저', '유저님', '사용자', '당신', '당신님'이라는 단어를 사용하지 마세요. 내담자를 지칭할 때는 실제 이름("${userName}")을 자연스럽게 사용해 주세요 (예: "${userName}님이 느낀 상처는~").
+   - [조사 정확성 규칙] 사용자/상대방 이름 뒤에 오는 조사(은/는, 이/가, 을/를, 과/와 등)는 이름의 받침 유무에 맞게 정확히 사용하세요. 받침 없는 이름(예: 재희) 뒤에는 "는/가/를/와"를, 받침 있는 이름(예: 민준) 뒤에는 "은/이/을/과"를 사용하세요. 문장을 다 쓴 뒤 이름 바로 뒤 조사가 문법적으로 맞는지 한 번 더 확인하세요.
    - 차가운 진단서 톤(~로 해석됩니다)은 배제하고, 내 상처를 어루만지는 베스트셀러 심리 에세이 작가의 부드럽고 우아한 어조(~였을지도 모릅니다, ~아녔을까요?)로 작성하세요.
    - [중요] 응답에 별표(**)나 마크다운 문법을 절대 사용하지 말고, 강조하고 싶은 부분은 그냥 자연스러운 문장으로 표현하세요.
 
@@ -236,6 +244,12 @@ export const fetchGeminiRelationshipAnalysisV2 = async ({
    * INSUFFICIENT: "아 짜증나" 등 상황 맥락이 없이 의미 없는 단어만 반복되거나 분석이 불가능할 정도로 짧은 경우. (systemMessage: "지금 얼마나 화가 나고 답답하신지 그 감정의 크기는 온전히 전해져요. 하지만 상황에 대한 조각이 조금 부족하네요. 어떤 상황이었는지 조금만 더 구체적으로 들려주시겠어요?")
    * NORMAL: 위 세 가지에 해당하지 않는 정상적인 분석 가능 상태.
    * statusCode가 NORMAL이 아닐 경우 다른 모든 항목(map_data, mind_prescription 등)은 기본값이나 빈 문자열로 반환하고 오직 statusCode와 systemMessage만 정확히 반환할 것.
+
+6. [좌표 계산 규칙] - 중요!
+   - map_data의 x, y 값은 예시가 아니라 실제로 계산해야 하는 값입니다. 절대 0.0을 기본값으로 반환하지 마세요.
+   - x축: 입력된 상황이 "혼자 삼키는(마이너스 방향)"에 가까운지 "알아달라 외치는(플러스 방향)"에 가까운지 -1.0에서 1.0 사이 값으로 판단
+   - y축: "나를 보호하고 싶어(마이너스 방향)"에 가까운지 "다시 연결되고 싶어(플러스 방향)"에 가까운지 -1.0에서 1.0 사이 값으로 판단
+   - 실제 입력 내용을 근거로 판단하고, 애매하면 0에 가깝게 두되 정확히 0.0, 0.0으로 고정하지 마세요. (예: 0.2, -0.4 등 소수점 첫째 자리까지)
 
 아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
 {
@@ -535,3 +549,169 @@ ${isSuggestWrapUp && !isForceWrapUp ? `### [특별 지시: 대화 마무리 제�
   return sendPromptToGemini(prompt);
 };
 
+
+/**
+ * 11. [프리미엄] 가족/관계의 방 딥다이브 리포트 (기본 진단과 완전 분리된 별도 호출)
+ */
+export const fetchGeminiDeepDiveRelationship = async ({
+  userName = '당신',
+  partnerName = '상대방',
+  relationshipType = '가족',
+  userConcern = '',
+  partnerAction = '',
+  selectedEmotions = [],
+  coreNeed = '',
+  defenseStyle = ''
+}) => {
+  const isCloseRelation = relationshipType && (
+    relationshipType.includes('부부') ||
+    relationshipType.includes('연인') ||
+    relationshipType.includes('가족') ||
+    relationshipType.includes('배우자')
+  );
+  const partnerRef = isCloseRelation ? partnerName : `${partnerName}님`;
+  const emotionStr = Array.isArray(selectedEmotions) ? selectedEmotions.join(', ') : selectedEmotions;
+
+  const prompt = `### [Role]
+당신은 명리학적 자연 기질론과 서양 심리학의 EFT(정서중심 부부치료), 이마고(Imago) 부부/가족 치료, 사티어(Satir) 의사소통 유형을 결합한 세계 최고의 하이브리드 관계 코칭 전문가입니다.
+
+### [Context Input]
+- 내담자 이름: ${userName}
+- 상대방 이름: ${partnerRef} (관계: ${relationshipType})
+- 내담자 고민: "${userConcern}"
+- 상대의 행동: "${partnerAction}"
+- 선택한 감정: ${emotionStr || '없음'}
+- 내담자의 핵심 욕구: "${coreNeed}"
+- 원하는 대화 방식: "${defenseStyle}"
+
+### [Task]
+위 상황을 EFT/이마고 치료 관점에서 깊이 분석하여, 두 사람의 무의식적 패턴과 치유를 향한 통찰을 담은 심층 딥다이브 리포트를 생성하세요. 이 리포트는 기본 진단과 분리된 별도 심층 분석으로, 가장 깊은 수준의 통찰을 제공해야 합니다.
+
+### [Generation Rules]
+
+**1. 갈등의 톱니바퀴 분석 (core_conflict_mechanism)**
+- 두 사람의 기질적 차이가 이번 상황("${partnerAction}")에서 어떻게 반복적 방어기제 충돌로 이어지는지 구조적으로 묘사
+- 상대방의 날 선 행동 뒤에 숨겨진 애착 불안과 무력감의 실체를 번역
+- 동시에 ${userName}이 왜 그 행동에 깊이 상처받았는지 심리학적으로 공감하고 수용
+- 반드시 4~5문장, 줄바꿈(\\n\\n) 포함
+
+**2. 무의식의 그림자와 내면 아이 (unconscious_projection)**
+- 상대방의 행동 이면에 있는 결핍과 ${userName}의 무의식적 투사, 과거 상처를 다세대 관점에서 조명
+- 이마고 이론의 '유년기 상처가 현재 갈등을 촉발하는 방식' 적용
+- 반드시 4~5문장, 줄바꿈(\\n\\n) 포함
+
+**3. 치유를 향한 관계의 재구성 (healing_insight)**
+- 누구의 잘못도 아닌 '관계의 역동' 자체를 객관화
+- 서로의 내면 아이를 안아주기 위한 심리학적 통찰과 재연결 방향 제시
+- 반드시 4~5문장, 줄바꿈(\\n\\n) 포함
+
+**4. 실전 핑퐁 대화 시나리오 3단계 (premium_scenario_expansion)**
+- stage_1_soft_boundary: 상대의 노력을 인정하는 쿠션어 + "${userConcern}"의 상처받은 사건 요약 + 부드러운 경계선 긋기. 최소 3~4문장. ${userName}이 ${partnerRef}에게 직접 할 말(구어체 반말 또는 존댓말 유지).
+- stage_2_cushion_response.expected_reaction_A: 상대가 억울해하며 핑계 댈 때 예상되는 대사(짧게)
+- stage_2_cushion_response.response: 그 핑계에 감정적 동요 없이 쿠션어로 대처하는 화법. 최소 3~4문장.
+- stage_3_firm_timeout.expected_reaction_B: 상대가 화내거나 무례하게 나올 때 예상되는 대사(짧게)
+- stage_3_firm_timeout.response: 감정적 동요 없이 경계를 긋는 단호한 I-Message/타임아웃 선언. 최소 3~4문장.
+
+### [Tone & Manner Rules]
+1. **호칭 규칙**: '유저', '사용자', '당신', '당신님' 등의 단어는 절대 사용 금지. 반드시 입력된 이름(${userName}, ${partnerRef})을 사용.
+2. **존칭 그룹 구분**:
+   - 상대방(${partnerRef})이 '부부/연인/가족/배우자' 등 매우 가까운 관계일 때는 이름 자체만 사용 (예: "미미가", "철수와"). 
+   - 그 외의 지인/동료일 때는 이름에 '님'을 붙임. (프롬프트 내 입력된 ${partnerRef}을 그대로 활용).
+3. **구체성**: "${userConcern}" 및 "${partnerAction}" 상황을 추상적으로 얼버무리지 말고 구체적인 정황을 직접 언급.
+4. **스타일 & 방패문장**: 따뜻하고 쉬운 구어체 사용. 단, "~~일 수 있습니다", "~~수도 있습니다" 같은 추측성 방패문장은 지양하고 "~입니다", "~해요" 등 단단하고 확신 있는 평서문으로 문장을 완성.
+5. **[조사 정확성 규칙]**: 사용자/상대방 이름 뒤에 오는 조사(은/는, 이/가, 을/를, 과/와 등)는 이름의 받침 유무에 맞게 정확히 사용하세요. 받침 없는 이름(예: 재희) 뒤에는 "는/가/를/와"를, 받침 있는 이름(예: 민준) 뒤에는 "은/이/을/과"를 사용하세요. 문장을 다 쓴 뒤 이름 바로 뒤 조사가 문법적으로 맞는지 한 번 더 확인하세요.
+
+아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
+{
+  "core_conflict_mechanism": "갈등의 톱니바퀴 분석 (4~5문장, \\n\\n 포함)",
+  "unconscious_projection": "무의식의 그림자와 내면 아이 (4~5문장, \\n\\n 포함)",
+  "healing_insight": "치유를 향한 관계의 재구성 (4~5문장, \\n\\n 포함)",
+  "premium_scenario_expansion": {
+    "stage_1_soft_boundary": "1단계 대화 (3~4문장)",
+    "stage_2_cushion_response": {
+      "expected_reaction_A": "상대방 예상 반응 A (짧게)",
+      "response": "2단계 쿠션어 대처 (3~4문장)"
+    },
+    "stage_3_firm_timeout": {
+      "expected_reaction_B": "상대방 예상 반응 B (짧게)",
+      "response": "3단계 단호한 I-Message (3~4문장)"
+    }
+  }
+}`;
+
+  return sendPromptToGemini(prompt, { userName, partnerName, userConcern }, { maxOutputTokens: 3000 });
+};
+
+/**
+ * 12. [프리미엄] 나의 방 딥다이브 리포트 — 내면 아이 집중 (기본 진단과 완전 분리된 별도 호출)
+ */
+export const fetchGeminiDeepDiveSelf = async ({
+  userName = '당신',
+  userConcern = '',
+  userEmotion = '',
+  mbti = '',
+  sajuElement = ''
+}) => {
+  const prompt = `### [Role]
+당신은 상처받은 내면 아이(Inner Child)를 깊이 이해하고, 반복되는 심리 패턴의 기원을 따뜻하게 짚어주는 심층 심리 상담사입니다.
+
+### [Context Input]
+- 내담자 이름: ${userName}
+- 내담자 고민/상황: "${userConcern}"
+- 선택한 감정: "${userEmotion}"
+- MBTI: ${mbti || '미입력'}
+- 명리학적 기질: ${sajuElement || '미입력'}
+
+### [Task]
+위 상황에서 반복되는 내면의 심리 패턴, 그 기원이 된 과거 장면, 그리고 지금의 나를 다시 안아주는 치유 통찰을 생성하세요. 이 리포트는 기본 자가진단과 분리된 더 깊은 내면 탐구로, 상대방 없이 오직 내 내면에만 집중합니다.
+
+### [Generation Rules]
+
+**1. 내 안에서 반복되는 패턴 (inner_pattern_mechanism)**
+- "${userConcern}" 상황에서 드러나는 자기방어/자기비판 패턴을 구체적으로 짚기
+- ${mbti}와 ${sajuElement}의 성질을 개념어 직접 노출 없이 자연스럽게 녹여서 분석 ("MBTI", "명리학" 단어 자체는 쓰지 말 것)
+- 반드시 4~5문장, 줄바꿈(\\n\\n) 포함
+
+**2. 그 시절의 나를 만나기 (inner_child_origin)**
+- 위 패턴이 처음 만들어진 구체적인 장면 또는 시기를 내면 아이 관점에서 조명
+- 상처받은 어린 시절의 자아가 어떤 결정을 내렸는지(믿음/규칙 형성)를 따뜻하게 서술
+- 반드시 4~5문장, 줄바꿈(\\n\\n) 포함
+
+**3. 지금의 나를 다시 안아주기 (healing_insight)**
+- 지금의 성숙한 자아가 그 내면 아이에게 다가가 돌보는 심리적 통찰
+- 실천 가능한 자기 돌봄 방향 1가지 포함
+- 반드시 4~5문장, 줄바꿈(\\n\\n) 포함
+
+### [Tone & Manner Rules]
+1. **호칭 규칙**: '유저', '사용자', '당신', '당신님' 등의 단어는 절대 사용 금지. 반드시 입력된 이름(${userName})을 자연스럽게 사용 (예: "${userName}의 마음속", "${userName}이 느낀").
+2. **구체성**: 입력된 고민 "${userConcern}"과 선택된 감정 "${userEmotion}"을 피상적으로 얼버무리지 말고 구체적 정황과 감정을 직접 언급.
+3. **스타일 & 방패문장**: 따뜻하고 쉬운 구어체를 유지. "~~일 수 있습니다", "~~일지도 모릅니다" 같은 추측성 방패문장은 쓰지 말고 "~입니다", "~해요" 처럼 단단하고 확신 있는 평서문으로 문장을 맺을 것.
+4. **[조사 정확성 규칙]**: 사용자 이름 뒤에 오는 조사(은/는, 이/가, 을/를, 과/와 등)는 이름의 받침 유무에 맞게 정확히 사용하세요. 받침 없는 이름(예: 재희) 뒤에는 "는/가/를/와"를, 받침 있는 이름(예: 민준) 뒤에는 "은/이/을/과"를 사용하세요. 문장을 다 쓴 뒤 이름 바로 뒤 조사가 문법적으로 맞는지 한 번 더 확인하세요.
+
+### [호칭 대상 구분 규칙 — 매우 중요]
+- "${userName}"만 사용. "유저", "사용자", "당신", "당신님" 절대 금지.
+- 내면 아이를 지칭할 때: "어린 ${userName}", "그 시절의 ${userName}" 등 이름 활용.
+
+- "${userConcern}"과 "${userEmotion}"에서 구체적 내용을 최소 1개 이상 직접 인용하거나 반영.
+- 어떤 상황에도 그대로 붙여쓸 수 있는 일반론적 위로 문장 금지.
+
+### [문체 규칙 — 매우 중요]
+- 차가운 진단서 톤 금지. 다정하고 섬세한 심리 에세이 문체.
+- 훈계하거나 지시하는 말투 절대 금지. 온전한 공감과 수용의 어조.
+- 같은 어미 반복 금지. 다양한 종결 어미 사용.
+- 응답에 별표(**)나 마크다운 문법 절대 사용 금지.
+
+### [방패 문장류 스타일 규칙]
+- healing_insight의 마무리 문장은 반드시 동사가 포함된 완결형 문장으로.
+- 좋은 예: "지금의 ${userName}은 그 내면 아이를 혼자 두지 않아도 된다."
+- 나쁜 예: "내면 아이 수용." (동사 없는 명사 나열)
+
+아래 JSON 형식으로만 응답해. 마크다운 코드블록 없이 순수 JSON만 반환해.
+{
+  "inner_pattern_mechanism": "내 안에서 반복되는 패턴 (4~5문장, \\n\\n 포함)",
+  "inner_child_origin": "그 시절의 나를 만나기 (4~5문장, \\n\\n 포함)",
+  "healing_insight": "지금의 나를 다시 안아주기 (4~5문장, \\n\\n 포함)"
+}`;
+
+  return sendPromptToGemini(prompt, { userName, userConcern, userEmotion }, { maxOutputTokens: 2500 });
+};
