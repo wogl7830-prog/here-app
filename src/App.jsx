@@ -5185,15 +5185,14 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                 {/* 스크립트 강조 블록 */}
                 <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', padding: '28px 22px', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', marginBottom: '24px', position: 'relative' }}>
                   <div style={{ fontSize: '1.5rem', color: '#E2725B', lineHeight: '1', marginBottom: '8px', opacity: 0.6 }}>❝</div>
-                  <p style={{ fontSize: '1.15rem', color: '#333', fontWeight: 'bold', lineHeight: '1.6', margin: '0 0 8px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center' }}>
+                  <p style={{ fontSize: '1.15rem', color: '#333', fontWeight: 'bold', lineHeight: '1.6', margin: '0 0 16px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center' }}>
                     {mockData.transcription_sentence || mockData.share_main_sentence || (typeof mockData.mind_prescription === 'object' ? mockData.mind_prescription?.bridge_action : '')}
+                  </p>
+                  <p style={{ fontSize: '0.95rem', color: '#666', lineHeight: '1.75', margin: '0 0 8px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center' }}>
+                    {mockData.prescription?.content || mockData.share_sub_sentence || ''}
                   </p>
                   <div style={{ fontSize: '1.5rem', color: '#E2725B', lineHeight: '1', textAlign: 'right', opacity: 0.6 }}>❞</div>
                 </div>
-
-                <p style={{ fontSize: '0.95rem', color: '#666', lineHeight: '1.75', margin: '0 0 30px 0', wordBreak: 'keep-all', fontFamily: '"Nanum Myeongjo", serif', textAlign: 'center' }}>
-                  {mockData.prescription?.content || mockData.share_sub_sentence || ''}
-                </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <button
