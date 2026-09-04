@@ -5370,23 +5370,39 @@ function FamilyRelationshipView({ partnerName = "미미", userConcern, partnerAc
                   ) : null}
                 </div>
               ) : (
-                <div style={{ position: 'relative', marginTop: '16px', padding: '40px 20px', borderRadius: '24px', backgroundColor: '#1A2A4E', overflow: 'hidden', textAlign: 'center', boxShadow: '0 10px 30px rgba(26,42,78,0.1)' }}>
-                  <div style={{ position: 'relative', zIndex: 2 }}>
+                <div style={{ position: 'relative', marginTop: '16px', padding: '40px 20px', minHeight: '300px', borderRadius: '24px', backgroundColor: '#1A2A4E', overflow: 'hidden', textAlign: 'center', boxShadow: '0 10px 30px rgba(26,42,78,0.1)' }}>
+                  
+                  {/* 블러 효과 뒤에 깔릴 백그라운드 더미 콘텐츠 */}
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, padding: '40px 28px', zIndex: 0, textAlign: 'left', opacity: 0.7 }}>
+                    <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🧩 우리를 옭아맨 갈등의 톱니바퀴</h4>
+                    <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: '0 0 28px 0', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.6 }}>
+                      두 사람은 겉보기엔 사소한 이유로 다투는 것 같지만, 사실 그 이면에는 서로 인정받고 싶어 하는 강한 욕구가 숨어 있습니다. 상대방의 침묵은 당신을 무시해서가 아니라, 더 큰 상처를 피하기 위한 방어 기제일 수 있습니다.
+                    </p>
+                    <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🌑 무의식의 그림자와 내면 아이</h4>
+                    <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, fontFamily: '"Nanum Myeongjo", serif', opacity: 0.6 }}>
+                      어린 시절 겪었던 결핍이 현재의 관계에서 투사되어, 상대방의 작은 거절에도 크게 반응하게 됩니다. 치유를 위해서는 이 패턴을 인식하고...
+                    </p>
+                  </div>
+
+                  {/* 블러 오버레이 */}
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(180deg, rgba(26,42,78,0) 0%, rgba(26,42,78,0.9) 100%)', zIndex: 1, backdropFilter: 'blur(6px)' }}></div>
+
+                  {/* 전면 잠금 안내 UI */}
+                  <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', marginTop: '30px' }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>🔒</div>
                     <h3 style={{ fontSize: '1.25rem', color: '#FFF', fontWeight: '800', marginBottom: '12px' }}>
                       프리미엄 딥다이브 리포트
                     </h3>
-                    <p style={{ fontSize: '0.95rem', color: '#A9B4D0', lineHeight: '1.6', marginBottom: '24px', wordBreak: 'keep-all' }}>
+                    <p style={{ fontSize: '0.95rem', color: '#FFF', lineHeight: '1.6', marginBottom: '24px', wordBreak: 'keep-all', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
                       갈등의 근본 원인과 무의식적 패턴, <br />치유를 위한 실전 대화 시나리오를 확인하세요.
                     </p>
                     <button
                       onClick={handlePayment}
-                      style={{ backgroundColor: '#E2725B', color: '#FFF', border: 'none', borderRadius: '12px', padding: '14px 28px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(226,114,91,0.3)' }}
+                      style={{ backgroundColor: '#E2725B', color: '#FFF', border: 'none', borderRadius: '12px', padding: '14px 28px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(226,114,91,0.5)' }}
                     >
                       딥다이브 리포트 보기
                     </button>
                   </div>
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(180deg, rgba(26,42,78,0) 0%, #1A2A4E 100%)', zIndex: 1, backdropFilter: 'blur(10px)' }}></div>
                 </div>
               )}
             </div>
