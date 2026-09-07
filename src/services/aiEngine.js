@@ -153,7 +153,7 @@ ${recentLogStr
   "keywords": ["이번 편지에서 다룬 핵심 주제를 2~3개의 짧은 한글 키워드나 짧은 구로. 완성된 문장이 아니라 단어/짧은 구 형태로."]
 }`;
 
-  return sendPromptToGemini(prompt, null, {});
+  return sendPromptToGemini(prompt, null, { responseSchema: { type: 'OBJECT', properties: { letter: { type: 'STRING' }, affirmation: { type: 'STRING' }, keywords: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['letter', 'affirmation', 'keywords'] } });
 };
 
 
@@ -183,7 +183,7 @@ export const fetchGeminiFollowUp = async (userText) => {
   "chips": ["감정단어1", "감정단어2", "감정단어3", "감정단어4", "감정단어5"]
 }`;
 
-  return sendPromptToGemini(prompt);
+  return sendPromptToGemini(prompt, null, { responseSchema: { type: 'OBJECT', properties: { question: { type: 'STRING' }, chips: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['question', 'chips'] } });
 };
 
 /**
@@ -276,7 +276,7 @@ export const fetchGeminiRelationshipAnalysisV2 = async ({
   "premium_teaser": "심층 분석에 대한 호기심을 극대화하는 한 줄의 훅(Hook) 문구"
 }`;
 
-  return sendPromptToGemini(prompt, null, { maxOutputTokens: 2048 });
+  return sendPromptToGemini(prompt, null, { maxOutputTokens: 8192, responseSchema: { type: 'OBJECT', properties: { statusCode: { type: 'STRING', enum: ['NORMAL', 'DANGER', 'PROFANITY', 'INSUFFICIENT'] }, systemMessage: { type: 'STRING' }, map_data: { type: 'OBJECT', properties: { user: { type: 'OBJECT', properties: { x: { type: 'NUMBER' }, y: { type: 'NUMBER' } }, required: ['x', 'y'] }, partner: { type: 'OBJECT', properties: { x: { type: 'NUMBER' }, y: { type: 'NUMBER' } }, required: ['x', 'y'] } }, required: ['user', 'partner'] }, firstWord: { type: 'STRING' }, statusStatement: { type: 'STRING' }, mind_prescription: { type: 'STRING' }, share_main_sentence: { type: 'STRING' }, share_sub_sentence: { type: 'STRING' }, extracted_emotions: { type: 'ARRAY', items: { type: 'STRING' } }, partnerWindow: { type: 'STRING' }, premium_teaser: { type: 'STRING' } }, required: ['statusCode', 'systemMessage', 'map_data', 'firstWord', 'statusStatement', 'mind_prescription', 'share_main_sentence', 'share_sub_sentence', 'extracted_emotions', 'partnerWindow', 'premium_teaser'] } });
 };
 
 /**
@@ -310,7 +310,7 @@ Guideline:
   "deep_analysis_3_action": "일반적인 힐링 팁(호흡, 휴식 등) 하나와, 사용자가 입력한 구체적 상황에 실제로 적용 가능한 행동 제안 하나를 반드시 포함하여 작성할 것 (3~4문장)."
 }`;
 
-  return sendPromptToGemini(prompt);
+  return sendPromptToGemini(prompt, null, { responseSchema: { type: 'OBJECT', properties: { statusCode: { type: 'STRING', enum: ['NORMAL', 'DANGER', 'PROFANITY', 'INSUFFICIENT'] }, systemMessage: { type: 'STRING' }, empathy_acceptance: { type: 'STRING' }, deep_analysis_1_voice: { type: 'STRING' }, deep_analysis_2_inner_child: { type: 'STRING' }, deep_analysis_3_action: { type: 'STRING' } }, required: ['statusCode', 'systemMessage', 'empathy_acceptance', 'deep_analysis_1_voice', 'deep_analysis_2_inner_child', 'deep_analysis_3_action'] } });
 };
 
 /**
@@ -340,7 +340,7 @@ Guideline:
   }
 }`;
 
-  return sendPromptToGemini(prompt);
+  return sendPromptToGemini(prompt, null, { responseSchema: { type: 'OBJECT', properties: { premium_monthly_analytics: { type: 'OBJECT', properties: { monthly_theme_title: { type: 'STRING' }, highlight_badges: { type: 'ARRAY', items: { type: 'STRING' } }, growth_evidence_data: { type: 'STRING' }, trigger_pattern_insight: { type: 'STRING' }, next_month_mission: { type: 'STRING' } }, required: ['monthly_theme_title', 'highlight_badges', 'growth_evidence_data', 'trigger_pattern_insight', 'next_month_mission'] } }, required: ['premium_monthly_analytics'] } });
 };
 
 /**
@@ -361,7 +361,7 @@ Guideline:
 }`;
 
   try {
-    const data = await sendPromptToGemini(prompt);
+    const data = await sendPromptToGemini(prompt, null, { responseSchema: { type: 'OBJECT', properties: { preview_sentence: { type: 'STRING' } }, required: ['preview_sentence'] } });
     return data?.preview_sentence || '오늘은 조급함을 내려놓고 당신만의 속도를 존중하는 법을 알려줄게요.';
   } catch (error) {
     console.error('Proactive Preview Generation Error:', error);
@@ -472,7 +472,7 @@ export const fetchGeminiRelationshipAnalysis = async (
   "shield_affirmation": "오늘의 방패 문장 (1문장)",
   "premium_teaser": "심층 분석 훅 문구"
 }`;
-  return sendPromptToGemini(prompt, { userConcern, partnerAction, partnerName, relationType, defenseStyle, userName }, { maxOutputTokens: 2048 });
+  return sendPromptToGemini(prompt, { userConcern, partnerAction, partnerName, relationType, defenseStyle, userName }, { maxOutputTokens: 8192, responseSchema: { type: 'OBJECT', properties: { statusCode: { type: 'STRING', enum: ['NORMAL', 'DANGER', 'PROFANITY', 'INSUFFICIENT'] }, systemMessage: { type: 'STRING' }, extracted_emotions: { type: 'ARRAY', items: { type: 'STRING' } }, statusStatement: { type: 'STRING' }, boundary_report: { type: 'STRING' }, persona_script: { type: 'STRING' }, shield_affirmation: { type: 'STRING' }, premium_teaser: { type: 'STRING' } }, required: ['statusCode', 'systemMessage', 'extracted_emotions', 'statusStatement', 'boundary_report', 'persona_script', 'shield_affirmation', 'premium_teaser'] } });
 };
 
 /**
@@ -554,7 +554,7 @@ ${isSuggestWrapUp && !isForceWrapUp ? `### [특별 지시: 대화 마무리 제�
   "systemMessage": "DANGER 상태일 때만 출력할 시스템 위기 안내 메시지. 그 외에는 빈 문자열"
 }`;
 
-  return sendPromptToGemini(prompt);
+  return sendPromptToGemini(prompt, null, { responseSchema: { type: 'OBJECT', properties: { statusCode: { type: 'STRING', enum: ['OK', 'DANGER', 'PROFANITY', 'INSUFFICIENT'] }, reply: { type: 'STRING' }, systemMessage: { type: 'STRING' } }, required: ['statusCode', 'reply', 'systemMessage'] } });
 };
 
 
@@ -647,7 +647,7 @@ export const fetchGeminiDeepDiveRelationship = async ({
   }
 }`;
 
-  return sendPromptToGemini(prompt, { userName, partnerName, userConcern }, { maxOutputTokens: 3000 });
+  return sendPromptToGemini(prompt, { userName, partnerName, userConcern }, { maxOutputTokens: 8192, responseSchema: { type: 'OBJECT', properties: { core_conflict_mechanism: { type: 'STRING' }, unconscious_projection: { type: 'STRING' }, healing_insight: { type: 'STRING' }, premium_scenario_expansion: { type: 'OBJECT', properties: { stage_1_soft_boundary: { type: 'STRING' }, stage_2_cushion_response: { type: 'OBJECT', properties: { expected_reaction_A: { type: 'STRING' }, response: { type: 'STRING' } }, required: ['expected_reaction_A', 'response'] }, stage_3_firm_timeout: { type: 'OBJECT', properties: { expected_reaction_B: { type: 'STRING' }, response: { type: 'STRING' } }, required: ['expected_reaction_B', 'response'] } }, required: ['stage_1_soft_boundary', 'stage_2_cushion_response', 'stage_3_firm_timeout'] } }, required: ['core_conflict_mechanism', 'unconscious_projection', 'healing_insight', 'premium_scenario_expansion'] } });
 };
 
 /**
@@ -721,5 +721,5 @@ export const fetchGeminiDeepDiveSelf = async ({
   "healing_insight": "지금의 나를 다시 안아주기 (4~5문장, \\n\\n 포함)"
 }`;
 
-  return sendPromptToGemini(prompt, { userName, userConcern, userEmotion }, { maxOutputTokens: 2500 });
+  return sendPromptToGemini(prompt, { userName, userConcern, userEmotion }, { maxOutputTokens: 8192, responseSchema: { type: 'OBJECT', properties: { inner_pattern_mechanism: { type: 'STRING' }, inner_child_origin: { type: 'STRING' }, healing_insight: { type: 'STRING' } }, required: ['inner_pattern_mechanism', 'inner_child_origin', 'healing_insight'] } });
 };

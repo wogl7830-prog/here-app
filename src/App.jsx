@@ -4097,34 +4097,63 @@ export default function App() {
 
                         {/* 나의 방 딥다이브 버튼 */}
                         {!selfDeepDiveData && !selfDeepDiveLoading && (
-                          <button
-                            id="self-deepdive-btn"
-                            style={{ ...styles.button, backgroundColor: '#1A2A4E', boxShadow: '0 4px 15px rgba(26,42,78,0.25)' }}
-                            onClick={async () => {
-                              if (!TEMP_ALWAYS_UNLOCK_PREMIUM) return;
-                              setSelfDeepDiveLoading(true);
-                              setSelfDeepDiveError(false);
-                              try {
-                                console.log('[DEBUG-DEEPDIVE-SELF] fetchGeminiDeepDiveSelf 호출 시작');
-                                const data = await fetchGeminiDeepDiveSelf({
-                                  userName: formData?.name || '당신',
-                                  userConcern: currentConcernData.text || '',
-                                  userEmotion: (currentConcernData.emotions || []).join(', '),
-                                  mbti: formData?.mbti || '',
-                                  sajuElement: formData?.sajuElement || ''
-                                });
-                                console.log('[DEBUG-DEEPDIVE-SELF] 딥다이브 결과:', data);
-                                setSelfDeepDiveData(data);
-                              } catch (err) {
-                                console.warn('[DEBUG-DEEPDIVE-SELF] 딥다이브 API 실패:', err);
-                                setSelfDeepDiveError(true);
-                              } finally {
-                                setSelfDeepDiveLoading(false);
-                              }
-                            }}
-                          >
-                            🗝️ 내면 아이 딥다이브 리포트 보기
-                          </button>
+                          <div style={{ position: 'relative', marginTop: '16px', padding: '40px 20px', minHeight: '300px', borderRadius: '24px', backgroundColor: '#1A2A4E', overflow: 'hidden', textAlign: 'center', boxShadow: '0 10px 30px rgba(26,42,78,0.1)' }}>
+                            {/* 블러를 전담하는 백그라운드 컨테이너 (모서리 삐져나옴 방지) */}
+                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: '24px', overflow: 'hidden', zIndex: 0 }}>
+                              {/* 뒷배경 더미 콘텐츠 */}
+                              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, padding: '40px 28px', textAlign: 'left', opacity: 0.85 }}>
+                                <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🔁 내 안에서 반복되는 패턴</h4>
+                                <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: '0 0 28px 0', fontFamily: '"Nanum Myeongjo", serif', opacity: 0.8 }}>
+                                  나의 내면 아이는 왜 특정한 상황에서 자꾸만 같은 감정을 느낄까요? 이면에 숨겨진 진짜 원인을 찾아보고 반복되는 고리를 끊어낼 방법을 알아봅니다.
+                                </p>
+                                <h4 style={{ fontSize: '1.0rem', color: '#E2725B', margin: '0 0 12px 0', fontWeight: 'bold' }}>🧒 그 시절의 나를 만나기</h4>
+                                <p style={{ fontSize: '0.95rem', color: '#FDF0E6', lineHeight: '1.8', margin: 0, fontFamily: '"Nanum Myeongjo", serif', opacity: 0.8 }}>
+                                  오랫동안 묻어두었던 어린 시절의 기억과 상처를 마주하며, 이제는 어른이 된 내가 그 아이를 온전히 안아줄 수 있는 방법을...
+                                </p>
+                              </div>
+                              {/* 블러 오버레이 */}
+                              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(180deg, rgba(26,42,78,0) 0%, rgba(26,42,78,0.6) 100%)', backdropFilter: 'blur(2.5px)' }}></div>
+                            </div>
+                            
+                            {/* 전면 잠금 안내 UI (블러 영역 밖으로 완전히 분리) */}
+                            <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', marginTop: '30px' }}>
+                              <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>🔒</div>
+                              <h3 style={{ fontSize: '1.25rem', color: '#FFF', fontWeight: '800', marginBottom: '12px' }}>
+                                프리미엄 딥다이브 리포트
+                              </h3>
+                              <p style={{ fontSize: '0.95rem', color: '#FFF', lineHeight: '1.6', marginBottom: '24px', wordBreak: 'keep-all', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                                반복되는 감정 패턴의 기원을 찾고, <br />내면 아이를 치유하는 심층 분석을 확인하세요.
+                              </p>
+                              <button
+                                id="self-deepdive-btn"
+                                onClick={async () => {
+                                  if (!TEMP_ALWAYS_UNLOCK_PREMIUM) return;
+                                  setSelfDeepDiveLoading(true);
+                                  setSelfDeepDiveError(false);
+                                  try {
+                                    console.log('[DEBUG-DEEPDIVE-SELF] fetchGeminiDeepDiveSelf 호출 시작');
+                                    const data = await fetchGeminiDeepDiveSelf({
+                                      userName: formData?.name || '당신',
+                                      userConcern: currentConcernData.text || '',
+                                      userEmotion: (currentConcernData.emotions || []).join(', '),
+                                      mbti: formData?.mbti || '',
+                                      sajuElement: formData?.sajuElement || ''
+                                    });
+                                    console.log('[DEBUG-DEEPDIVE-SELF] 딥다이브 결과:', data);
+                                    setSelfDeepDiveData(data);
+                                  } catch (err) {
+                                    console.warn('[DEBUG-DEEPDIVE-SELF] 딥다이브 API 실패:', err);
+                                    setSelfDeepDiveError(true);
+                                  } finally {
+                                    setSelfDeepDiveLoading(false);
+                                  }
+                                }}
+                                style={{ backgroundColor: '#E2725B', color: '#FFF', border: 'none', borderRadius: '12px', padding: '14px 28px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 4px 15px rgba(226,114,91,0.5)' }}
+                              >
+                                딥다이브 리포트 보기
+                              </button>
+                            </div>
+                          </div>
                         )}
                         {selfDeepDiveLoading && (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '24px', backgroundColor: '#1A2A4E', borderRadius: '16px' }}>
