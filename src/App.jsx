@@ -708,7 +708,7 @@ export default function App() {
 
   // -- Daily Limit Logic --
   const MAX_DAILY_LIMIT = 3;
-  const [showLimitPopup, setShowLimitPopup] = useState(false);
+  const [limitPopupTime, setLimitPopupTime] = useState(0);
   const getTodayKey = () => {
     const d = new Date();
     return `analysis_count_shared_${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
@@ -1341,7 +1341,7 @@ export default function App() {
 
   const handleConcernSubmit = () => {
     if (getDailyUsageCount() >= MAX_DAILY_LIMIT) {
-      setShowLimitPopup(true);
+      setLimitPopupTime(Date.now());
       return;
     }
 
@@ -3866,7 +3866,7 @@ export default function App() {
                   savedConcernData={savedConcernData}
                   onNext={() => {
                     if (getDailyUsageCount() >= MAX_DAILY_LIMIT) {
-                      setShowLimitPopup(true);
+                      setLimitPopupTime(Date.now());
                       return;
                     }
                     setIsLoadingResult(true);
@@ -4666,7 +4666,7 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
         )}
       </div>
 
-      {showLimitPopup && (
+      {limitPopupTime > 0 && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(5px)' }}>
           <div style={{ width: '85%', maxWidth: '320px', backgroundColor: '#FDFBF7', borderRadius: '24px', padding: '30px 24px', textAlign: 'center', boxShadow: '0 15px 35px rgba(0,0,0,0.2)' }}>
             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🌙</div>
@@ -4678,7 +4678,7 @@ function MonthlyAnalyticsView({ userName = "당신", onReset }) {
               더 깊은 이야기가 궁금하시다면 딥다이브 리포트도 준비되어 있어요.
             </p>
             <button
-              onClick={() => setShowLimitPopup(false)}
+              onClick={() => setLimitPopupTime(0)}
               style={{ width: '100%', padding: '14px', borderRadius: '14px', border: 'none', backgroundColor: '#E2725B', color: '#FFF', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer' }}
             >
               확인

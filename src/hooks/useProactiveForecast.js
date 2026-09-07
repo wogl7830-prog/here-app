@@ -1,54 +1,76 @@
 import { useState, useEffect } from 'react';
-import { eventScheduler } from '../services/proactive/EventScheduler';
+import { detectImminentHighTensionEvent } from '../services/proactive/EventScheduler';
+import { fetchGeminiProactivePreview } from '../services/aiEngine';
 
 /**
  * useProactiveForecast
  * 
- * 컴포넌트 마운트 시 EventScheduler를 폴링/구독하여,
- * 현재 유저에게 임박한 중요 이벤트가 있다면 그에 맞는 예보 데이터(배너 UI 재정의용)를 반환합니다.
+ * 로그인된 유저 세션(userSession)이 유효할 때만 EventScheduler의 고긴장도 일정을 감지하여,
+ * 임박한 일정에 부합하는 선제적 행동 예보(Proactive Forecast) 배너 UI 데이터를 반환합니다.
  */
-export function useProactiveForecast(userId, userName, mbtiTrait) {
-  const [activeForecast, setActiveForecast] = useState(null);
+export const useProactiveForecast = (userSession, userName, userMbti) => {
+  const [forecast, setForecast] = useState(null);
 
-  useEffect(() => {
-    // 1. 초기 로드 시 이벤트 분석
-    const analyzeEvents = async () => {
-      const event = await eventScheduler.analyzeUpcomingContext(userId);
-      if (event) {
-        // 이벤트 타입에 따라 UI 설정 반환
-        if (event.type === 'work_meeting') {
-          setActiveForecast({
-            type: 'proactive_meeting',
-            title: `곧 다가오는 회의,\n긴장을 풀고 준비해 볼까요?`,
-            sub: `${mbtiTrait?.name || '당신'} 성향을 띠는 ${userName || '당신'} 님에게 꼭 맞는 ${event.title} 직전 마인드셋`,
-            preview: '오늘은 완벽한 결론보다, 유연하게 의견을 조율하는 과정 자체에 집중해 보세요.',
-            gradient: 'linear-gradient(135deg, #F3F1F8 0%, #E8E5F2 50%, #E2DEED 100%)',
-            label: 'PROACTIVE FORECAST',
-            color: '#6B5B95'
-          });
+  const updateForecast = async () => {
+    if (!userSession) {
+      setForecast(null);
+      return;
+    }
+    const imminentEvent = detectImminentHighTensionEvent();
+    if (!imminentEvent) {
+      setForecast(null);
+      return;
+    }
+
+    // 일정 맞춤형 페르소나 및 배너 데이터 생성
+    const isWork = imminentEvent.category === 'work' || (imminentEvent.title && imminentEvent.title.match(/회의|발표|업무|팀장/));
+
+    let previewText = isWork
+      ? "회의와 성과 압박 속에서 나만의 단단한 경계를 지킬 수 있도록 마인드셋을 설계해 두었어요."
+      : "가족과의 관계 속에서 온전한 나로 서 있으면서도 유연하게 흐를 수 있는 온기를 건넬게요.";
+
+    try {
+      if (typeof fetchGeminiProactivePreview === 'function') {
+        const cacheKey = `here_proactive_preview_${imminentEvent.title}_${new Date().toDateString()}`;
+        const cachedPreview = localStorage.getItem(cacheKey);
+        
+        if (cachedPreview) {
+          previewText = cachedPreview;
+        } else {
+          const aiPreview = await fetchGeminiProactivePreview(imminentEvent.title, imminentEvent.category || (isWork ? 'work_meeting' : 'family'));
+          if (aiPreview) {
+            previewText = aiPreview;
+            localStorage.setItem(cacheKey, aiPreview);
+          }
         }
       }
-    };
-    
-    analyzeEvents();
+    } catch (e) {
+      // fallback
+    }
 
-    // 2. 실시간 상태 변경 구독 (Webhook/Socket 대응)
-    const unsubscribe = eventScheduler.subscribe((data) => {
-      if (data.hasActiveForecast && data.eventData.type === 'work_meeting') {
-        setActiveForecast({
-            type: 'proactive_meeting',
-            title: `곧 다가오는 회의,\n긴장을 풀고 준비해 볼까요?`,
-            sub: `${mbtiTrait?.name || '당신'} 성향을 띠는 ${userName || '당신'} 님에게 꼭 맞는 ${data.eventData.title} 직전 마인드셋`,
-            preview: '오늘은 완벽한 결론보다, 유연하게 의견을 조율하는 과정 자체에 집중해 보세요.',
-            gradient: 'linear-gradient(135deg, #F3F1F8 0%, #E8E5F2 50%, #E2DEED 100%)',
-            label: 'PROACTIVE FORECAST',
-            color: '#6B5B95'
-        });
+    setForecast(prev => {
+      // 이미 같은 이벤트에 대해 같은 텍스트가 세팅되어 있다면 업데이트하지 않음 (리렌더링 방지)
+      if (prev && prev.eventData?.title === imminentEvent.title && prev.preview === previewText) {
+        return prev;
       }
+      return {
+        theme: 'light',
+        label: 'PROACTIVE FORECAST',
+        title: `${userName || '당신'} 님, 곧 긴장되는 일정이 예정되어 있어요 🛡️`,
+        sub: `[${imminentEvent.title}] 시작 전, 마음의 방패를 씌워드릴게요.`,
+        preview: previewText,
+        gradient: 'linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 50%, #FAE8FF 100%)', // 우아한 보랏빛 스카이 라인
+        eventData: imminentEvent
+      };
     });
+  };
 
-    return () => unsubscribe();
-  }, [userId, userName, mbtiTrait]);
+  useEffect(() => {
+    updateForecast();
+    // 캘린더 상태 변경이나 탭 전환 시 동기화되도록 풀링 가동
+    const interval = setInterval(updateForecast, 2500);
+    return () => clearInterval(interval);
+  }, [userSession, userName, userMbti]);
 
-  return activeForecast;
-}
+  return forecast;
+};

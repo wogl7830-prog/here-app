@@ -188,7 +188,7 @@ export default function BreathingModal({ onClose }) {
           textAlign: 'center',
           maxWidth: '280px',
           wordBreak: 'keep-all',
-          fontFamily: '"Nanum Myeongjo", serif',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif',
           letterSpacing: '0.3px',
         }}>
           {isDone

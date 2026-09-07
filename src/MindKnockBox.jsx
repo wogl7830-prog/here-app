@@ -314,7 +314,7 @@ export default function MindKnockBox({ onClose, onToast }) {
                 <div style={{ position: 'absolute', top: '14px', left: '16px', fontSize: '2.4rem', color: '#E2725B', opacity: 0.08, fontFamily: 'Georgia, serif', lineHeight: 1 }}>"</div>
                 <p style={{
                   fontSize: '1.05rem', color: '#3A2E2A', lineHeight: '1.85',
-                  margin: 0, fontFamily: '"Nanum Myeongjo", serif',
+                  margin: 0, fontFamily: '-apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif',
                   wordBreak: 'keep-all', position: 'relative', zIndex: 1,
                   padding: '8px 0 0 10px',
                 }}>

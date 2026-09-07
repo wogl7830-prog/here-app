@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { sendPromptToGemini } from './services/aiEngine';
 
 const EmotionData = {
   '가슴이 답답하고 숨이 막혀요': {
@@ -52,23 +53,8 @@ export default function HybridPrescriptionView({ onBack, userName = '당신' }) 
     try {
       const prompt = `당신은 ${userName} 님을 존중하고 따뜻하게 안아주는 전문 심리 상담가입니다. ${userName} 님의 현재 감정 상태는 "${customEmotion}"이며, 이 감정의 강도는 100점 만점에 ${intensity}점입니다. 이 감정을 분석해서 따뜻하고 섬세한 위로의 말(reply)과 추천 호흡 루틴 이름(routineName), 그리고 적절한 호흡 가이드 시간(breathingDuration, 기본 15초이나 강도가 70 이상이면 20~30초 사이로 설정)을 JSON 형식으로 반환해 주세요. 응답은 반드시 JSON 객체만 포함해야 합니다. 예시: { "reply": "...", "routineName": "...", "breathingDuration": 20 }`;
 
-      const response = await fetch('http://localhost:3000/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
-      });
-      const data = await response.json();
-      
-      let aiResponseText = '';
-      if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
-        aiResponseText = data.candidates[0].content.parts[0].text;
-      } else if (data.text) {
-        aiResponseText = data.text;
-      }
-
-      // JSON 파싱 (마크다운 블록 제거)
-      const cleanText = aiResponseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const resultObj = JSON.parse(cleanText);
+      // sendPromptToGemini → Render 백엔드 → Gemini API
+      const resultObj = await sendPromptToGemini(prompt);
 
       setAiResult({
         reply: resultObj.reply,
@@ -183,13 +169,13 @@ export default function HybridPrescriptionView({ onBack, userName = '당신' }) 
         {phase === 1 && (
           <div className="anim-fade" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <h2 style={{ fontSize: '1.4rem', color: '#4A4A4A', fontWeight: '800', marginBottom: '8px', textAlign: 'center', wordBreak: 'keep-all', lineHeight: '1.4' }}>
-              {userName} 님,<br/>지금 마음의 크기는 어느 정도인가요?
+              {userName && userName !== '당신' ? `${userName} 님, 오늘 마음의 여유는 어느 정도인가요? 🌿` : '오늘 마음의 여유는 어느 정도인가요? 🌿'}
             </h2>
             
             {/* Emotion Thermometer */}
             <div style={{ width: '100%', maxWidth: '300px', marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <span style={{ fontSize: '1rem', fontWeight: '700', color: getIntensityColor(intensity), marginBottom: '12px' }}>
-                강도: {intensity}°
+                {intensity < 25 ? '여유가 전혀 없어요 🌧️' : intensity < 50 ? '조금 지쳐있어요 ☁️' : intensity < 75 ? '나름 평온해요 🌿' : '마음의 여유가 넘쳐요 ✨'} ({intensity})
               </span>
               <div style={{ position: 'relative', width: '100%', height: '6px', borderRadius: '4px', background: `linear-gradient(to right, ${getIntensityColor(intensity)} ${intensity}%, #E0E0E0 ${intensity}%)` }}>
                 <input 
@@ -214,8 +200,8 @@ export default function HybridPrescriptionView({ onBack, userName = '당신' }) 
                 }}></div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginTop: '8px', fontSize: '0.8rem', color: '#888' }}>
-                <span>잔잔함</span>
-                <span>격렬함</span>
+                <span>여유 없음</span>
+                <span>여유 가득</span>
               </div>
             </div>
 
