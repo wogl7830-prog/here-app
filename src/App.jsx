@@ -2170,6 +2170,7 @@ export default function App() {
           {step === 'mypage' && (
             <MyPage 
               formData={formData} 
+              setFormData={setFormData}
               mbtiTrait={userMbtiTrait} 
               onboardingMbti={onboardingMbti}
               emotionDB={emotionDB} 

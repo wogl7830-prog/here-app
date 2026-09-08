@@ -57,11 +57,22 @@ const FlameIcon = () => (
     <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
   </svg>
 );
+const PencilIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9"></path>
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+  </svg>
+);
+
+const ampmOptions = [
+  { val: '오전', label: '오전', icon: '🌅' },
+  { val: '오후', label: '오후', icon: '🌇' },
+];
 
 // --- Sub-components ---
 
 // 1. Inner Map (나의 내면 지도) 및 프로필 정보 통합 카드
-const InnerMap = ({ formData, mbtiTrait, onboardingMbti, resourceScore, userSession, isPaid }) => {
+const InnerMap = ({ formData, mbtiTrait, onboardingMbti, resourceScore, userSession, isPaid, onEditClick }) => {
   const [gauge, setGauge] = useState(0);
 
   useEffect(() => {
@@ -95,6 +106,9 @@ const InnerMap = ({ formData, mbtiTrait, onboardingMbti, resourceScore, userSess
             <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#333333', fontWeight: '800' }}>
               {userSession?.displayName || formData?.name || '나'} 님
             </h2>
+            <button onClick={onEditClick} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#BBA898', display: 'flex', alignItems: 'center' }}>
+              <PencilIcon />
+            </button>
             <span style={{ 
               display: 'inline-flex', alignItems: 'center', gap: '4px',
               padding: '3px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '800', 
@@ -588,7 +602,9 @@ const GoogleCalendarSection = () => {
 
 // --- Main Component ---
 
-export default function MyPage({ formData = {}, mbtiTrait = {}, onboardingMbti = '', onBack, emotionDB = [], userSession = null, onLogout, familyDB = [], onTriggerAlimtalk, onGoToJournal }) {
+export default function MyPage({ formData = {}, setFormData, mbtiTrait = {}, onboardingMbti = '', onBack, emotionDB = [], userSession = null, onLogout, familyDB = [], onTriggerAlimtalk, onGoToJournal }) {
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editData, setEditData] = useState({});
   const safeEmotionDB = Array.isArray(emotionDB) ? emotionDB : [];
   const score = Math.min(safeEmotionDB.length * 5 + 45, 100);
   const isPaid = new URLSearchParams(window.location.search).get('boundaryPayment') === 'success' || new URLSearchParams(window.location.search).get('payment') === 'success';
@@ -645,7 +661,25 @@ export default function MyPage({ formData = {}, mbtiTrait = {}, onboardingMbti =
         
         {/* GROUP 1: SELF */}
         <div style={{ fontSize: '0.75rem', color: '#999999', letterSpacing: '1px', fontWeight: '700', marginBottom: '16px' }}>SELF · REFLECTION</div>
-        <InnerMap formData={formData} mbtiTrait={mbtiTrait} onboardingMbti={onboardingMbti} resourceScore={score} userSession={userSession} isPaid={isPaid} />
+        <InnerMap 
+          formData={formData} 
+          mbtiTrait={mbtiTrait} 
+          onboardingMbti={onboardingMbti} 
+          resourceScore={score} 
+          userSession={userSession} 
+          isPaid={isPaid}
+          onEditClick={() => {
+            setEditData({
+              name: formData.name || '',
+              year: formData.year || '',
+              month: formData.month || '',
+              day: formData.day || '',
+              ampm: formData.ampm || '오전',
+              hour: formData.hour || '',
+            });
+            setIsEditingProfile(true);
+          }}
+        />
 
         <div
           onClick={onGoToJournal}
@@ -704,6 +738,160 @@ export default function MyPage({ formData = {}, mbtiTrait = {}, onboardingMbti =
           </button>
         </div>
       </div>
+
+      {/* 프로필 수정 모달 */}
+      {isEditingProfile && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          <div style={{
+            backgroundColor: '#FDFBF7', borderRadius: '24px', padding: '30px',
+            width: '90%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.1)'
+          }}>
+            <h3 style={{ margin: '0 0 20px 0', fontSize: '1.3rem', color: '#333333', fontWeight: '800', textAlign: 'center' }}>나의 정보 수정</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* 이름 */}
+              <div>
+                <span style={{ display: 'block', fontSize: '0.85rem', color: '#888888', fontWeight: '700', marginBottom: '8px' }}>이름 <span style={{color: '#E2725B'}}>*</span></span>
+                <input
+                  style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', fontSize: '1rem', boxSizing: 'border-box' }}
+                  placeholder="어떻게 불러드릴까요?"
+                  value={editData.name}
+                  onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                />
+              </div>
+
+              {/* 생년월일 */}
+              <div>
+                <span style={{ display: 'block', fontSize: '0.85rem', color: '#888888', fontWeight: '700', marginBottom: '8px' }}>태어난 날 <span style={{color: '#E2725B'}}>*</span></span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select
+                    style={{ flex: 2, padding: '14px 12px', borderRadius: '14px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', fontSize: '1rem', appearance: 'none', textAlign: 'center' }}
+                    value={editData.year || ''}
+                    onChange={(e) => {
+                      const newYear = e.target.value;
+                      let newDay = editData.day;
+                      if (newYear && editData.month && newDay) {
+                        const maxDays = new Date(parseInt(newYear), parseInt(editData.month), 0).getDate();
+                        if (parseInt(newDay) > maxDays) newDay = maxDays.toString();
+                      }
+                      setEditData({ ...editData, year: newYear, day: newDay });
+                    }}
+                  >
+                    <option value="">연도</option>
+                    {Array.from({length: new Date().getFullYear() - 1930 + 1}, (_, i) => new Date().getFullYear() - i).map(y => (
+                      <option key={y} value={y}>{y}년</option>
+                    ))}
+                  </select>
+                  <select
+                    style={{ flex: 1, padding: '14px 12px', borderRadius: '14px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', fontSize: '1rem', appearance: 'none', textAlign: 'center' }}
+                    value={editData.month || ''}
+                    onChange={(e) => {
+                      const newMonth = e.target.value;
+                      let newDay = editData.day;
+                      if (editData.year && newMonth && newDay) {
+                        const maxDays = new Date(parseInt(editData.year), parseInt(newMonth), 0).getDate();
+                        if (parseInt(newDay) > maxDays) newDay = maxDays.toString();
+                      }
+                      setEditData({ ...editData, month: newMonth, day: newDay });
+                    }}
+                  >
+                    <option value="">월</option>
+                    {Array.from({length: 12}, (_, i) => i + 1).map(m => (
+                      <option key={m} value={m}>{m}월</option>
+                    ))}
+                  </select>
+                  <select
+                    style={{ flex: 1, padding: '14px 12px', borderRadius: '14px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', fontSize: '1rem', appearance: 'none', textAlign: 'center' }}
+                    value={editData.day || ''}
+                    onChange={(e) => setEditData({ ...editData, day: e.target.value })}
+                  >
+                    <option value="">일</option>
+                    {Array.from({length: (!editData.year || !editData.month || editData.year === '연도' || editData.month === '월') ? 31 : new Date(parseInt(editData.year), parseInt(editData.month), 0).getDate()}, (_, i) => i + 1).map(d => (
+                      <option key={d} value={d}>{d}일</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 태어난 시간 */}
+              <div>
+                <span style={{ display: 'block', fontSize: '0.85rem', color: '#888888', fontWeight: '700', marginBottom: '8px' }}>태어난 시간 <span style={{fontSize: '0.7rem', color: '#9A8070', fontWeight: 'normal'}}>(선택)</span></span>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                  {ampmOptions.map(opt => (
+                    <button
+                      key={opt.val}
+                      style={{
+                        flex: 1, padding: '12px 0', borderRadius: '14px',
+                        border: editData.ampm === opt.val ? '1.5px solid #E2725B' : '1px solid #E5E5E5',
+                        backgroundColor: editData.ampm === opt.val ? '#FFF5EE' : '#FFFFFF',
+                        color: editData.ampm === opt.val ? '#E2725B' : '#777777',
+                        fontWeight: editData.ampm === opt.val ? 'bold' : 'normal',
+                        cursor: 'pointer', transition: 'all 0.2s',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center'
+                      }}
+                      onClick={() => setEditData({ ...editData, ampm: opt.val })}
+                    >
+                      <span style={{ fontSize: '1.1rem', marginBottom: '2px' }}>{opt.icon}</span>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {(editData.ampm === '오전' || editData.ampm === '오후') && (
+                  <select
+                    style={{
+                      width: '100%', padding: '14px 16px', borderRadius: '14px',
+                      border: editData.hour ? '1px solid #E5E5E5' : '1.5px solid #E2725B', 
+                      backgroundColor: '#FFFFFF', fontSize: '1rem', appearance: 'none', cursor: 'pointer',
+                    }}
+                    value={editData.hour || ''}
+                    onChange={(e) => setEditData({ ...editData, hour: e.target.value })}
+                  >
+                    <option value="">시각을 선택해주세요</option>
+                    {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}시</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '30px' }}>
+              <button 
+                style={{ flex: 1, padding: '16px 0', borderRadius: '16px', backgroundColor: '#F5F5F5', color: '#777777', border: 'none', fontWeight: '700', fontSize: '1rem', cursor: 'pointer' }}
+                onClick={() => setIsEditingProfile(false)}
+              >
+                취소
+              </button>
+              <button 
+                style={{ flex: 2, padding: '16px 0', borderRadius: '16px', backgroundColor: '#E2725B', color: '#FFFFFF', border: 'none', fontWeight: '700', fontSize: '1rem', cursor: 'pointer' }}
+                onClick={() => {
+                  if (!editData.name || editData.name.trim() === '') {
+                    alert('이름을 입력해주세요.');
+                    return;
+                  }
+                  if (!editData.year || editData.year === '연도' || !editData.month || editData.month === '월' || !editData.day || editData.day === '일') {
+                    alert('생년월일을 모두 선택해주세요.');
+                    return;
+                  }
+                  const updated = { ...formData, ...editData };
+                  if (setFormData) setFormData(updated);
+                  localStorage.setItem('here_my_info', JSON.stringify({
+                    name: updated.name, year: updated.year, month: updated.month, day: updated.day,
+                    ampm: updated.ampm, hour: updated.hour
+                  }));
+                  setIsEditingProfile(false);
+                }}
+              >
+                저장하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
