@@ -16,9 +16,6 @@ import {
   getAuth,
   signInAnonymously,
   GoogleAuthProvider,
-  signInWithRedirect,
-  linkWithRedirect,
-  getRedirectResult,
   signInWithPopup,
   linkWithPopup,
   EmailAuthProvider,
@@ -27,6 +24,8 @@ import {
   linkWithCredential,
   onAuthStateChanged,
   signOut,
+  getAdditionalUserInfo,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -69,99 +68,50 @@ export const startAnonymousSession = async () => {
 
 // ── 2. Google 계정 연결 / 로그인 ─────────────────────────────────────────────
 /**
- * DEV(localhost): 팝업 방식 — 결과를 즉시 반환합니다.
- *   서드파티 쿠키 차단 정책으로 인해 리다이렉트 방식에서 getRedirectResult()가
- *   null을 반환하는 문제를 우회합니다. COOP 헤더(same-origin-allow-popups)가
- *   vite.config.js에 설정되어 있어야 팝업이 무한 대기 없이 동작합니다.
+ * 항상 팝업 방식으로 Google 로그인/연결을 수행합니다.
+ * DEV/PROD 모두 팝업 방식을 사용하여 서드파티 쿠키 차단 + 리다이렉트 세션 증발
+ * 문제를 완전히 회피합니다.
  *
- * PROD(배포): 리다이렉트 방식 — 호출 즉시 페이지를 이동시키므로 결과를 반환하지 않습니다.
- *   결과는 App.jsx의 useEffect에서 checkRedirectAuthResult()로 수신합니다.
- *
- * @returns {Promise<UserCredential|null>} DEV에서는 결과 객체, PROD에서는 null
+ * @returns {Promise<{ user, operationType, hadConflict, isNewUser }>}
  */
 export const loginWithGoogle = async () => {
   const provider = new GoogleAuthProvider();
   const currentUser = auth.currentUser;
 
-  // ── DEV: 팝업 방식 (localhost 서드파티 쿠키 차단 우회) ──────────────────────
-  if (import.meta.env.DEV) {
-    if (currentUser && currentUser.isAnonymous) {
-      try {
-        console.log('[Auth] DEV 환경: linkWithPopup 사용');
-        const result = await linkWithPopup(currentUser, provider);
-        return { ...result, hadConflict: false };
-      } catch (linkError) {
-        // 이 구글 계정이 이미 다른 UID에 연결되어 있는 경우 → 일반 로그인으로 재시도
-        if (
-          linkError.code === 'auth/credential-already-in-use' ||
-          linkError.code === 'auth/email-already-in-use'
-        ) {
-          console.log('[Auth] DEV: linkWithPopup 충돌 → signInWithPopup으로 재시도');
-          try {
-            const result = await signInWithPopup(auth, provider);
-            return { ...result, hadConflict: true };
-          } catch (signInError) {
-            console.error('[Auth] DEV: signInWithPopup 재시도 실패:', signInError);
-            throw signInError;
-          }
+  if (currentUser && currentUser.isAnonymous) {
+    try {
+      console.log('[Auth] linkWithPopup 시도');
+      const result = await linkWithPopup(currentUser, provider);
+      const isNewUser = getAdditionalUserInfo(result)?.isNewUser || false;
+      return { ...result, hadConflict: false, isNewUser };
+    } catch (linkError) {
+      if (
+        linkError.code === 'auth/credential-already-in-use' ||
+        linkError.code === 'auth/email-already-in-use'
+      ) {
+        console.log('[Auth] linkWithPopup 충돌 → signInWithPopup으로 재시도');
+        try {
+          const result = await signInWithPopup(auth, provider);
+          const isNewUser = getAdditionalUserInfo(result)?.isNewUser || false;
+          return { ...result, hadConflict: true, isNewUser };
+        } catch (signInError) {
+          console.error('[Auth] signInWithPopup 재시도 실패:', signInError);
+          throw signInError;
         }
-        console.error('[Auth] Google 팝업 로그인 실패:', linkError);
-        throw linkError;
       }
-    } else {
-      try {
-        console.log('[Auth] DEV 환경: signInWithPopup 사용');
-        const result = await signInWithPopup(auth, provider);
-        return { ...result, hadConflict: false };
-      } catch (error) {
-        console.error('[Auth] Google 팝업 로그인 실패:', error);
-        throw error;
-      }
+      console.error('[Auth] Google 팝업 로그인 실패:', linkError);
+      throw linkError;
     }
-  }
-
-  // ── PROD: 리다이렉트 방식 ────────────────────────────────────────────────────
-  try {
-    if (currentUser && currentUser.isAnonymous) {
-      await linkWithRedirect(currentUser, provider);
-    } else {
-      await signInWithRedirect(auth, provider);
+  } else {
+    try {
+      console.log('[Auth] signInWithPopup 시도');
+      const result = await signInWithPopup(auth, provider);
+      const isNewUser = getAdditionalUserInfo(result)?.isNewUser || false;
+      return { ...result, hadConflict: false, isNewUser };
+    } catch (error) {
+      console.error('[Auth] Google 팝업 로그인 실패:', error);
+      throw error;
     }
-    return null;
-  } catch (error) {
-    console.error('[Auth] Google 리다이렉트 로그인 시작 실패:', error);
-    throw error;
-  }
-};
-
-/**
- * 리다이렉트 로그인에서 돌아왔을 때 결과를 파싱합니다. (App.jsx의 useEffect에서 사용)
- * @returns {Promise<{ user: any, isNewLink: boolean, hadConflict: boolean } | null>}
- */
-export const checkRedirectAuthResult = async () => {
-  try {
-    console.log('[Auth Debug] checkRedirectAuthResult 호출됨. auth.currentUser:', auth.currentUser?.uid, 'isAnonymous:', auth.currentUser?.isAnonymous);
-    const result = await getRedirectResult(auth);
-    console.log('[Auth Debug] getRedirectResult 반환값:', result);
-    
-    if (!result) return null;
-
-    const operationType = result.operationType; // 'signIn' or 'link'
-    const isNewLink = operationType === 'link';
-    console.log(`[Auth Debug] 파싱 성공! operationType: ${operationType}, isNewLink: ${isNewLink}`);
-    return { user: result.user, isNewLink, hadConflict: false };
-  } catch (error) {
-    console.log('[Auth Debug] getRedirectResult 에러 발생:', error.code, error.message);
-    if (
-      error.code === 'auth/credential-already-in-use' ||
-      error.code === 'auth/email-already-in-use'
-    ) {
-      // 이미 연결된 계정이면 일반 로그인(signInWithRedirect)으로 다시 시도
-      await signInWithRedirect(auth, new GoogleAuthProvider());
-      return { user: null, isNewLink: false, hadConflict: true };
-    }
-    console.error('[Auth] Google 리다이렉트 결과 처리 에러:', error);
-    throw error;
   }
 };
 
@@ -180,12 +130,12 @@ export const registerWithEmail = async (email, password) => {
     if (currentUser && currentUser.isAnonymous) {
       const credential = EmailAuthProvider.credential(email, password);
       const result = await linkWithCredential(currentUser, credential);
-      return { user: result.user, isNewLink: true };
+      return { user: result.user, isNewLink: true, isNewUser: true };
     }
 
     // 비로그인 상태 → 새 계정 생성
     const result = await createUserWithEmailAndPassword(auth, email, password);
-    return { user: result.user, isNewLink: false };
+    return { user: result.user, isNewLink: false, isNewUser: true };
   } catch (error) {
     console.error('[Auth] 이메일 회원가입 실패:', error.code, error.message);
     throw error;
@@ -201,14 +151,24 @@ export const registerWithEmail = async (email, password) => {
 export const loginWithEmail = async (email, password) => {
   try {
     const result = await signInWithEmailAndPassword(auth, email, password);
-    return { user: result.user, isNewLink: false };
+    return { user: result.user, isNewLink: false, isNewUser: false };
   } catch (error) {
     console.error('[Auth] 이메일 로그인 실패:', error.code, error.message);
     throw error;
   }
 };
 
-// ── 5. 로그아웃 ───────────────────────────────────────────────────────────────
+// ── 5. 이메일 비밀번호 재설정 ──────────────────────────────────────────────────
+export const resetEmailPassword = async (email) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (error) {
+    console.error('[Auth] 비밀번호 재설정 메일 발송 실패:', error.code, error.message);
+    throw error;
+  }
+};
+
+// ── 6. 로그아웃 ───────────────────────────────────────────────────────────────
 export const logout = async () => {
   try {
     await signOut(auth);
@@ -219,7 +179,7 @@ export const logout = async () => {
   }
 };
 
-// ── 6. Auth 상태 변화 구독 ────────────────────────────────────────────────────
+// ── 7. Auth 상태 변화 구독 ────────────────────────────────────────────────────
 /**
  * App.jsx의 useEffect에서 호출하여 인증 상태를 실시간으로 구독합니다.
  * @param {Function} callback - (user | null) => void
@@ -229,7 +189,7 @@ export const subscribeToAuthState = (callback) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// ── 7. ID 토큰 가져오기 (백엔드 API 인증용) ──────────────────────────────────
+// ── 8. ID 토큰 가져오기 (백엔드 API 인증용) ──────────────────────────────────
 /**
  * 현재 로그인된 사용자의 Firebase ID 토큰을 반환합니다.
  * 이 토큰을 API 요청의 Authorization 헤더에 포함시켜야 합니다.
@@ -249,7 +209,7 @@ export const getAuthToken = async (forceRefresh = false) => {
   }
 };
 
-// ── 8. Firestore 감정 DB 동기화 ───────────────────────────────────────────────
+// ── 9. Firestore 감정 DB 동기화 ───────────────────────────────────────────────
 /**
  * 암호화된 감정 DB를 Firestore에 저장합니다.
  * @param {string} userId - Firebase UID
@@ -257,7 +217,7 @@ export const getAuthToken = async (forceRefresh = false) => {
  */
 export const syncEmotionDBToCloud = async (userId, encryptedDB) => {
   try {
-    const timeoutPromise = new Promise((_, reject) => 
+    const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('TIMEOUT')), 12000)
     );
 

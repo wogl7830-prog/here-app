@@ -9,7 +9,7 @@ import {
   subscribeToAuthState,
   startAnonymousSession,
   getAuthToken,
-  checkRedirectAuthResult,
+  resetEmailPassword,
 } from './firebase';
 import { encryptData, decryptData } from './crypto';
 import MindKnockBox from './MindKnockBox';
@@ -616,15 +616,13 @@ export default function App() {
   const [mirroredPoints, setMirroredPoints] = useState({});
   const [userSession, setUserSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [isRedirectChecking, setIsRedirectChecking] = useState(
-    // DEV(localhost): 팝업 방식이므로 리다이렉트 확인 대기 불필요
-    // PROD(배포): 리다이렉트 복귀 후 결과를 받을 때까지 로딩 표시
-    import.meta.env.DEV ? false : true
-  );
+  // 팝업 방식으로 통일하여 리다이렉트 확인 대기 불필요
+  const isRedirectChecking = false;
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
   const [vaultKey, setVaultKey] = useState('');
 
@@ -685,9 +683,13 @@ export default function App() {
   }, [formData]);
   const [isEditingMyInfo, setIsEditingMyInfo] = useState(false);
 
+  // ── 실제 로그인(비익명) 상태일 때만 개인화된 이름 표시 (캐시 방지) ──
+  const isLoggedInUser = userSession && !userSession.isAnonymous;
+  const effectiveName = (isLoggedInUser && formData.name) ? formData.name : '';
+
   // ── Proactive Forecast 훅 ──
   const userMbtiTrait = mbtiTraits[onboardingMbti] || defaultMbtiTrait;
-  const proactiveForecast = useProactiveForecast(userSession?.uid ?? null, formData.name, userMbtiTrait);
+  const proactiveForecast = useProactiveForecast(userSession?.uid ?? null, effectiveName, userMbtiTrait);
 
   const [guideStep, setGuideStep] = useState(0);
   const [logoClickCount, setLogoClickCount] = useState(0);
@@ -791,92 +793,37 @@ export default function App() {
 
   // ── Firebase Auth 구독 + 익명 로그인 자동 시작 ──────────────────────────────
   useEffect(() => {
-    // 앱 시작 시 익명 로그인 자동 수행 (UID 확보)
-    startAnonymousSession();
-
     // Auth 상태 실시간 구독
-    const unsubscribe = subscribeToAuthState((firebaseUser) => {
+    // ▶ 팝업 방식으로 통일 완료 — signInWithRedirect / getRedirectResult 완전 제거
+    // ▶ firebaseUser가 null로 확정된 후에만 익명 로그인을 시도하여 Race Condition 방지
+    const unsubscribe = subscribeToAuthState(async (firebaseUser) => {
       console.log(`[Auth Debug] onAuthStateChanged 트리거됨. user: ${firebaseUser?.uid}, isAnonymous: ${firebaseUser?.isAnonymous}`);
-      setAuthLoading(false);
       if (firebaseUser) {
+        // 로그인된 사용자가 있으면 세션 즉시 반영
         setUserSession({
           uid: firebaseUser.uid,
           displayName: firebaseUser.displayName || formDataRef.current.name || null,
           email: firebaseUser.email || null,
           isAnonymous: firebaseUser.isAnonymous,
         });
+        setAuthLoading(false);
       } else {
-        // 비로그인 상태가 되면 즉시 익명 로그인
-        startAnonymousSession();
+        // Firebase가 '인증된 사용자 없음'을 완전히 확정한 후 → 익명 로그인 시도
+        // (authLoading은 익명 로그인 완료 후 해제하여 중간 상태의 UI 노출 방지)
+        setUserSession(null);
+        try {
+          await startAnonymousSession();
+          // startAnonymousSession() 성공 시 onAuthStateChanged가 다시 호출되어
+          // 위의 if(firebaseUser) 분기에서 자동으로 세션 설정 및 authLoading 해제됨
+        } catch (e) {
+          console.error('[Auth] 익명 세션 시작 실패:', e);
+          setAuthLoading(false); // 실패해도 로딩 상태 해제
+        }
       }
     });
 
     return () => unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── 리다이렉트 로그인 결과 수신 (PROD 배포 환경 전용, App 마운트 시 1회) ────
-  useEffect(() => {
-    // DEV(localhost)에서는 팝업 방식을 사용하므로 이 useEffect는 실행하지 않음
-    if (import.meta.env.DEV) return;
-
-    const handleRedirectResult = async () => {
-      try {
-        const result = await checkRedirectAuthResult();
-        if (result) {
-          setIsSyncing(true);
-          const { user, isNewLink, hadConflict } = result;
-
-          if (isNewLink) {
-            setToastMsg('✅ 기존 기록을 그대로 유지하며 Google 계정이 연결되었습니다!');
-            setTimeout(() => setToastMsg(''), 3000);
-          } else if (hadConflict) {
-            setToastMsg('이미 연결된 Google 계정으로 로그인했습니다.');
-            setTimeout(() => setToastMsg(''), 3000);
-          } else {
-            const existingCloudDB = await fetchEmotionDBFromCloud(user.uid);
-            if (existingCloudDB) {
-              setExistingCloudData(existingCloudDB);
-              setToastMsg('이전 금고 기록을 발견했습니다. 잠시 후 동기화됩니다.');
-              setTimeout(() => setToastMsg(''), 3000);
-            }
-          }
-
-          setShowCloudNudge(false);
-          setShowVaultPrompt(true);
-
-          // 저장해둔 pendingAction 복원
-          const savedPendingStr = sessionStorage.getItem('here_pending_action');
-          let restoredPending = null;
-          if (savedPendingStr) {
-            try {
-              restoredPending = JSON.parse(savedPendingStr);
-              setPendingAction(restoredPending);
-              sessionStorage.removeItem('here_pending_action'); // 복원 후 삭제
-            } catch (e) {
-              console.error('Failed to parse pending action', e);
-            }
-          }
-
-          // 리다이렉트 복귀 후 모달이 보이도록 화면 이동
-          if (restoredPending?.type === 'NAVIGATE') {
-            setStep(restoredPending.target);
-          } else if (step === 'login' || step === 'landing') {
-            setStep('dashboard');
-          }
-        }
-      } catch (error) {
-        console.error('[Auth Debug] Google 리다이렉트 로그인 실패:', error);
-        setToastMsg('Google 로그인에 실패했습니다. 다시 시도해주세요.');
-        setTimeout(() => setToastMsg(''), 3000);
-      } finally {
-        setIsSyncing(false);
-        console.log('[Auth Debug] isRedirectChecking을 false로 변경합니다.');
-        setIsRedirectChecking(false); // 리다이렉트 확인 완료
-      }
-    };
-
-    handleRedirectResult();
   }, []);
 
   useEffect(() => {
@@ -901,11 +848,11 @@ export default function App() {
     const fallbackTopics = ["우연히 올려다본 하늘", "스스로에게 허락하는 쉼", "계절의 변화가 주는 위로", "아주 작은 성취의 기쁨", "오롯이 나만을 위한 시간"];
     const fallbackTopic = fallbackTopics[Math.floor(Math.random() * fallbackTopics.length)];
 
-    const briefing = buildBriefing(emotionDB, formData.name);
+    const briefing = buildBriefing(emotionDB, effectiveName);
     const moodWeather = `${briefing.headline} ${briefing.emoji}`;
 
     fetchGeminiMorningLetter({
-      name: formData.name || '',
+      name: effectiveName || '',
       ampm: formData.ampm || '',
       elementName: ilgan.name,
       moodWeather,
@@ -950,23 +897,15 @@ export default function App() {
 
   // ── Google 계정 연결 / 로그인 ────────────────────────────────────────────────
   const handleCloudLogin = async () => {
-    setIsSyncing(true); // 로그인/동기화 시작 로딩 상태 (리다이렉트 전 표시)
-    
-    // 리다이렉트 되기 전에 보류 중인 액션이 있다면 백업 (PROD 전용)
-    if (!import.meta.env.DEV && pendingAction) {
-      sessionStorage.setItem('here_pending_action', JSON.stringify(pendingAction));
-    }
-    
+    setIsSyncing(true);
     try {
       const popupResult = await loginWithGoogle();
 
-      // DEV: 팝업 방식 — 즉시 결과 처리
-      if (import.meta.env.DEV && popupResult) {
-        const { user, operationType, hadConflict } = popupResult;
+      if (popupResult) {
+        const { user, operationType, hadConflict, isNewUser } = popupResult;
         const isNewLink = operationType === 'link';
 
         if (hadConflict) {
-          // linkWithPopup 충돌 → signInWithPopup 재시도 성공 케이스
           setToastMsg('이미 연결된 Google 계정으로 로그인했습니다.');
           setTimeout(() => setToastMsg(''), 3000);
         } else if (isNewLink) {
@@ -987,24 +926,20 @@ export default function App() {
         setShowCloudNudge(false);
         setShowVaultPrompt(true);
 
-        // pendingAction 복원
-        if (pendingAction?.type === 'NAVIGATE') {
+        if (isNewUser) {
+          setStep('info');
+        } else if (pendingAction?.type === 'NAVIGATE') {
           setStep(pendingAction.target);
         } else if (step === 'login' || step === 'landing') {
           setStep('dashboard');
         }
       }
-      // PROD: 리다이렉트 방식 — 페이지가 이동하므로 이후 코드는 실행되지 않음
     } catch (error) {
       console.error('[Auth] Google 로그인 에러:', error);
       setToastMsg('Google 로그인에 실패했습니다. 다시 시도해주세요.');
       setTimeout(() => setToastMsg(''), 3000);
-      setIsSyncing(false);
     } finally {
-      // DEV: 팝업 완료 후 로딩 해제 (PROD는 페이지가 이동해 실행 안 됨)
-      if (import.meta.env.DEV) {
-        setIsSyncing(false);
-      }
+      setIsSyncing(false);
     }
   };
 
@@ -1021,15 +956,18 @@ export default function App() {
       return;
     }
     try {
+      let isNewUser = false;
       if (authMode === 'register') {
-        const { isNewLink } = await registerWithEmail(authEmail, authPassword);
-        const msg = isNewLink
+        const result = await registerWithEmail(authEmail, authPassword);
+        isNewUser = result.isNewUser;
+        const msg = result.isNewLink
           ? '✅ 기존 기록을 유지하며 이메일 계정이 연결되었습니다!'
           : '✅ 이메일 계정이 생성되었습니다!';
         setToastMsg(msg);
         setTimeout(() => setToastMsg(''), 3000);
       } else {
-        await loginWithEmail(authEmail, authPassword);
+        const result = await loginWithEmail(authEmail, authPassword);
+        isNewUser = result.isNewUser;
         setToastMsg('✅ 로그인되었습니다!');
         setTimeout(() => setToastMsg(''), 3000);
       }
@@ -1038,6 +976,12 @@ export default function App() {
       setAuthPassword('');
       setShowCloudNudge(false);
       setShowVaultPrompt(true);
+
+      if (isNewUser) {
+        setStep('info');
+      } else if (step === 'login' || step === 'landing') {
+        setStep('dashboard');
+      }
     } catch (error) {
       const errorMessages = {
         'auth/email-already-in-use': '이미 사용 중인 이메일입니다. 로그인을 시도해보세요.',
@@ -1047,6 +991,21 @@ export default function App() {
         'auth/invalid-credential': '이메일 또는 비밀번호가 올바르지 않습니다.',
       };
       setAuthError(errorMessages[error.code] || '인증에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!authEmail) {
+      setAuthError('비밀번호를 재설정할 이메일 주소를 위에 입력해주세요.');
+      return;
+    }
+    try {
+      await resetEmailPassword(authEmail);
+      setToastMsg('비밀번호 재설정 이메일이 발송되었습니다.');
+      setTimeout(() => setToastMsg(''), 3000);
+      setAuthError('');
+    } catch (error) {
+      setAuthError('가입되지 않은 이메일이거나 발송에 실패했습니다.');
     }
   };
 
@@ -2262,10 +2221,10 @@ export default function App() {
                     <div style={{ position: 'absolute', bottom: '-5px', left: '50%', transform: 'translateX(-50%) rotate(45deg)', width: '12px', height: '12px', backgroundColor: '#E2725B' }}></div>
                   </div>
 
-                  <button onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('onboarding'); setOnboardingStep(1); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', backgroundColor: '#FEE500', color: '#3C1E1E', fontSize: '1.05rem', fontWeight: '800', cursor: 'pointer', transition: 'opacity 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <button onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', backgroundColor: '#FEE500', color: '#3C1E1E', fontSize: '1.05rem', fontWeight: '800', cursor: 'pointer', transition: 'opacity 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     카카오로 3초 만에 시작하기
                   </button>
-                  <button onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('onboarding'); setOnboardingStep(1); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', backgroundColor: '#03C75A', color: 'white', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', transition: 'opacity 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <button onClick={() => { setIsEnteringRoom(true); setTimeout(() => { setStep('info'); setIsEnteringRoom(false); window.scrollTo(0, 0); }, 500); }} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: 'none', backgroundColor: '#03C75A', color: 'white', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', transition: 'opacity 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     네이버로 시작하기
                   </button>
                   <button onClick={handleCloudLogin} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', color: '#4A4A4A', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', transition: 'background-color 0.2s', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
@@ -2449,7 +2408,7 @@ export default function App() {
           {step === 'daily_forecast' && (
             <HybridPrescriptionView 
               onBack={() => setStep('dashboard')}
-              userName={formData.name || '당신'}
+              userName={effectiveName || '당신'}
             />
           )}
 
@@ -2466,7 +2425,7 @@ export default function App() {
               {isLoadingResult && (
                 <LoadingScreen
                   trackType={trackType}
-                  userName={formData.name || ''}
+                  userName={effectiveName || ''}
                 />
               )}
               {step === 'shared_flow' && sharedStep === 'landing' && (
@@ -2512,9 +2471,7 @@ export default function App() {
                 const isDay = hour >= 10 && hour < 17;
 
                 // ── 사용자화(Personalization) 변수 ──
-                // 실제 로그인(비익명) 상태일 때만 개인화된 이름 표시
-                const isLoggedInUser = userSession && !userSession.isAnonymous;
-                const userNameDisplay = (isLoggedInUser && formData.name) ? formData.name : '당신';
+                const userNameDisplay = effectiveName || '당신';
 
 
 
@@ -2538,14 +2495,14 @@ export default function App() {
                 
                 // ── 로그인/비로그인 공통: buildBriefing 기반 개인화 배너 ──
                 {
-                  const briefing = buildBriefing(emotionDB, formData.name);
+                  const briefing = buildBriefing(emotionDB, effectiveName);
                   const streak = isLoggedInUser ? calculateStreak(emotionDB) : 0;
 
                   // 헤드라인에서 "이름 님," prefix를 "이름 님의 하늘은,\n"으로 변환
                   // 이름이 없는 비로그인은 prefix가 ''이므로 문장 자체로 자연스럽게 시작됨
-                  const namePrefix = formData.name ? `${formData.name} 님, ` : '';
+                  const namePrefix = effectiveName ? `${effectiveName} 님, ` : '';
                   let naturalHeadline = briefing.headline
-                    .replace(namePrefix, namePrefix ? `${formData.name} 님의 하늘은,\n` : '')
+                    .replace(namePrefix, namePrefix ? `${effectiveName} 님의 하늘은,\n` : '')
                     .replace('서서히 하늘이 열리고 있어요.', '서서히 열리고 있어요.')
                     .replace('오늘 하늘엔 틈새 햇살이 들어오고 있어요.', '틈새 햇살이 들어오고 있어요.')
                     // 이름이 있을 때만 적용: "이름 님의 하늘은,\n오늘의 하늘이 기다리고 있어요." → "아직 맑아지기를..."
@@ -3293,7 +3250,7 @@ export default function App() {
 
                       {/* 이름 */}
                       <div>
-                        <span className="onb-label">이름</span>
+                        <span className="onb-label">이름 <span style={{color: '#E2725B'}}>*</span></span>
                         <input
                           className="onb-input"
                           placeholder="어떻게 불러드릴까요?"
@@ -3304,40 +3261,63 @@ export default function App() {
 
                       {/* 생년월일 */}
                       <div>
-                        <span className="onb-label">태어난 날</span>
+                        <span className="onb-label">태어난 날 <span style={{color: '#E2725B'}}>*</span></span>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                          <input
+                          <select
                             className="onb-input"
-                            style={{ flex: 2, textAlign: 'center' }}
-                            placeholder="연도 (예: 1990)"
-                            maxLength="4"
-                            value={formData.year}
-                            onChange={(e) => { const v = e.target.value; setFormData({ ...formData, year: v }); if (v.length === 4) monthRef.current.focus(); }}
-                          />
-                          <input
-                            ref={monthRef}
+                            style={{ flex: 2, textAlign: 'center', appearance: 'none', cursor: 'pointer' }}
+                            value={formData.year || ''}
+                            onChange={(e) => {
+                              const newYear = e.target.value;
+                              let newDay = formData.day;
+                              if (newYear && formData.month && newDay) {
+                                const maxDays = new Date(parseInt(newYear), parseInt(formData.month), 0).getDate();
+                                if (parseInt(newDay) > maxDays) newDay = maxDays.toString();
+                              }
+                              setFormData({ ...formData, year: newYear, day: newDay });
+                            }}
+                          >
+                            <option value="">연도</option>
+                            {Array.from({length: new Date().getFullYear() - 1930 + 1}, (_, i) => new Date().getFullYear() - i).map(y => (
+                              <option key={y} value={y}>{y}년</option>
+                            ))}
+                          </select>
+                          <select
                             className="onb-input"
-                            style={{ flex: 1, textAlign: 'center' }}
-                            placeholder="월"
-                            maxLength="2"
-                            value={formData.month}
-                            onChange={(e) => { const v = e.target.value; setFormData({ ...formData, month: v }); if (v.length === 2) dayRef.current.focus(); }}
-                          />
-                          <input
-                            ref={dayRef}
+                            style={{ flex: 1, textAlign: 'center', appearance: 'none', cursor: 'pointer' }}
+                            value={formData.month || ''}
+                            onChange={(e) => {
+                              const newMonth = e.target.value;
+                              let newDay = formData.day;
+                              if (formData.year && newMonth && newDay) {
+                                const maxDays = new Date(parseInt(formData.year), parseInt(newMonth), 0).getDate();
+                                if (parseInt(newDay) > maxDays) newDay = maxDays.toString();
+                              }
+                              setFormData({ ...formData, month: newMonth, day: newDay });
+                            }}
+                          >
+                            <option value="">월</option>
+                            {Array.from({length: 12}, (_, i) => i + 1).map(m => (
+                              <option key={m} value={m}>{m}월</option>
+                            ))}
+                          </select>
+                          <select
                             className="onb-input"
-                            style={{ flex: 1, textAlign: 'center' }}
-                            placeholder="일"
-                            maxLength="2"
-                            value={formData.day}
+                            style={{ flex: 1, textAlign: 'center', appearance: 'none', cursor: 'pointer' }}
+                            value={formData.day || ''}
                             onChange={(e) => setFormData({ ...formData, day: e.target.value })}
-                          />
+                          >
+                            <option value="">일</option>
+                            {Array.from({length: (!formData.year || !formData.month || formData.year === '연도' || formData.month === '월') ? 31 : new Date(parseInt(formData.year), parseInt(formData.month), 0).getDate()}, (_, i) => i + 1).map(d => (
+                              <option key={d} value={d}>{d}일</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
 
                       {/* 태어난 시간 — Pill Toggle */}
                       <div>
-                        <span className="onb-label">태어난 시간</span>
+                        <span className="onb-label">태어난 시간 <span style={{fontSize: '0.7rem', color: '#9A8070', fontWeight: 'normal', textTransform: 'none', letterSpacing: 'normal'}}>(선택)</span></span>
                         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
                           {ampmOptions.map(opt => (
                             <button
@@ -3352,19 +3332,30 @@ export default function App() {
                         </div>
                         {/* 시제 선택 (ampm이 오전/오후일 때만 표시) */}
                         {(formData.ampm === '오전' || formData.ampm === '오후') && (
-                          <select
-                            style={{
-                              width: '100%', padding: '12px 16px', borderRadius: '14px',
-                              border: 'none', background: '#F9F4EF', fontSize: '0.95rem',
-                              color: '#4A3728', fontFamily: 'inherit', outline: 'none',
-                              appearance: 'none', cursor: 'pointer'
-                            }}
-                            value={formData.hour}
-                            onChange={(e) => setFormData({ ...formData, hour: e.target.value })}
-                          >
-                            <option value="">시각을 선택하세요</option>
-                            {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}시</option>)}
-                          </select>
+                          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                            <style>{`
+                              @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+                              @keyframes pulseBorder { 0% { border-color: #E2725B; box-shadow: 0 0 0 0 rgba(226,114,91,0.4); } 70% { border-color: #E2725B; box-shadow: 0 0 0 6px rgba(226,114,91,0); } 100% { border-color: #E2725B; box-shadow: 0 0 0 0 rgba(226,114,91,0); } }
+                            `}</style>
+                            <select
+                              style={{
+                                width: '100%', padding: '12px 16px', borderRadius: '14px',
+                                border: formData.hour ? '1.5px solid #E8DDD5' : '1.5px solid #E2725B', 
+                                background: formData.hour ? '#F9F4EF' : '#FFF5EE', 
+                                fontSize: '0.95rem',
+                                color: formData.hour ? '#4A3728' : '#E2725B', 
+                                fontWeight: formData.hour ? 'normal' : 'bold',
+                                fontFamily: 'inherit', outline: 'none',
+                                appearance: 'none', cursor: 'pointer',
+                                animation: formData.hour ? 'none' : 'pulseBorder 2s infinite'
+                              }}
+                              value={formData.hour}
+                              onChange={(e) => setFormData({ ...formData, hour: e.target.value })}
+                            >
+                              <option value="">시각을 선택해주세요</option>
+                              {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}시</option>)}
+                            </select>
+                          </div>
                         )}
                         <p style={{ fontSize: '0.78rem', color: '#BBA898', lineHeight: '1.65', margin: '10px 0 0 0', wordBreak: 'keep-all' }}>
                           정확한 시간을 모른다면 비워두셔도 좋습니다.<br />그 자체로도 충분히 아늑한 당신만의 공간이 열릴 거에요.
@@ -3375,6 +3366,22 @@ export default function App() {
                       <button
                         className="onb-enter-btn"
                         onClick={() => {
+                          const isNameValid = formData.name && formData.name.trim() !== '';
+                          const isYearValid = formData.year && formData.year !== '연도' && formData.year !== '';
+                          const isMonthValid = formData.month && formData.month !== '월' && formData.month !== '';
+                          const isDayValid = formData.day && formData.day !== '일' && formData.day !== '';
+                          
+                          if (!isNameValid) {
+                            setToastMsg('이름을 알려주세요.');
+                            setTimeout(() => setToastMsg(''), 3000);
+                            return;
+                          }
+                          if (!isYearValid || !isMonthValid || !isDayValid) {
+                            setToastMsg('생년월일을 모두 선택해주세요.');
+                            setTimeout(() => setToastMsg(''), 3000);
+                            return;
+                          }
+
                           setIsEnteringRoom(true);
                           setTimeout(() => {
                             if (trackType === '비밀의 방앗간' || trackType === '성장 탐험가') {
@@ -3384,7 +3391,7 @@ export default function App() {
                             } else if (trackType === '나를 지키는 울타리') {
                               setStep('concern');
                             } else {
-                              setStep('type_selection');
+                              setStep('dashboard');
                             }
                             setIsEnteringRoom(false);
                             window.scrollTo(0, 0);
@@ -4321,7 +4328,7 @@ export default function App() {
         <WeatherDashboard
           onClose={() => setIsWeatherOpen(false)}
           emotionDB={emotionDB}
-          formData={formData}
+          formData={{ ...formData, name: effectiveName }}
         />
       )}
 
@@ -4475,8 +4482,17 @@ export default function App() {
                 marginBottom: '20px', fontSize: '0.85rem', color: '#C2604A', lineHeight: '1.5',
                 border: '1px solid #F5C4BB',
               }}>
-                ✅ 지금까지 쌓인 <strong>감정 기록이 그대로 유지</strong>됩니다.<br />
-                계정을 만들면 안전하게 클라우드에 보관할 수 있어요.
+                {authMode === 'register' ? (
+                  <>
+                    ℹ️ 지금까지 쌓인 <strong>감정 기록이 그대로 유지</strong>됩니다.<br />
+                    계정을 만들면 안전하게 클라우드에 보관할 수 있어요.
+                  </>
+                ) : (
+                  <>
+                    🔒 다시 만나서 반가워요.<br />
+                    이메일로 로그인해주세요.
+                  </>
+                )}
               </div>
             )}
 
@@ -4495,19 +4511,32 @@ export default function App() {
                   transition: 'border-color 0.2s',
                 }}
               />
-              <input
-                type="password"
-                placeholder="비밀번호 (6자 이상)"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
-                style={{
-                  width: '100%', padding: '14px 16px', borderRadius: '12px',
-                  border: '1.5px solid #E5E0DA', fontSize: '0.95rem',
-                  backgroundColor: 'white', outline: 'none', boxSizing: 'border-box',
-                  fontFamily: 'inherit', color: '#3A2E2A',
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="비밀번호 (6자 이상)"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
+                  style={{
+                    width: '100%', padding: '14px 44px 14px 16px', borderRadius: '12px',
+                    border: '1.5px solid #E5E0DA', fontSize: '0.95rem',
+                    backgroundColor: 'white', outline: 'none', boxSizing: 'border-box',
+                    fontFamily: 'inherit', color: '#3A2E2A',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+                    color: '#A0968E', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                >
+                  {showPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
 
               {authError && (
                 <div style={{ fontSize: '0.85rem', color: '#D05A42', padding: '10px 14px', backgroundColor: '#FDF2F0', borderRadius: '10px', border: '1px solid #F5C4BB' }}>
@@ -4526,6 +4555,17 @@ export default function App() {
                 {authMode === 'register' ? '계정 만들기 & 기록 연결' : '로그인'}
               </button>
             </form>
+
+            {authMode === 'login' && (
+              <div style={{ textAlign: 'center', marginTop: '14px' }}>
+                <span
+                  onClick={handlePasswordReset}
+                  style={{ fontSize: '0.85rem', color: '#A0968E', textDecoration: 'underline', cursor: 'pointer' }}
+                >
+                  비밀번호를 잊으셨나요?
+                </span>
+              </div>
+            )}
 
             {/* 구글 로그인 구분선 */}
             <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', gap: '12px' }}>
