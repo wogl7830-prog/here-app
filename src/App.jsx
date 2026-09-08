@@ -3326,7 +3326,6 @@ export default function App() {
                               className={`ampm-pill${formData.ampm === opt.val ? ' active' : ''}`}
                               onClick={() => setFormData({ ...formData, ampm: opt.val })}
                             >
-                              <span style={{ display: 'block', fontSize: '1.1rem', marginBottom: '2px' }}>{opt.icon}</span>
                               {opt.label}
                             </button>
                           ))}

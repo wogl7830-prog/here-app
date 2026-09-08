@@ -301,8 +301,6 @@ const Settings = ({ onTriggerAlimtalk }) => {
     const saved = localStorage.getItem('here_tension_threshold');
     return saved ? Number(saved) : 70;
   });
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [kakaoEnabled, setKakaoEnabled] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('here_tension_threshold', tension);
@@ -344,53 +342,6 @@ const Settings = ({ onTriggerAlimtalk }) => {
             }}
           />
         </div>
-        
-        <hr style={{ border: 'none', borderTop: '1px solid #E5E5E5', margin: '0 -24px 24px -24px' }} />
-
-        {/* 알림 토글 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: '0.95rem', color: '#333333', fontWeight: '700' }}>앱 푸시 알림</div>
-              <div style={{ fontSize: '0.75rem', color: '#999999', marginTop: '4px' }}>처방전 및 위로 메시지 수신</div>
-            </div>
-            <ToggleSwitch isOn={pushEnabled} onToggle={() => setPushEnabled(!pushEnabled)} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: '0.95rem', color: '#333333', fontWeight: '700' }}>카카오 알림톡 수신</div>
-              <div style={{ fontSize: '0.75rem', color: '#999999', marginTop: '4px' }}>가족 관계망 공유 알림</div>
-            </div>
-            <ToggleSwitch isOn={kakaoEnabled} onToggle={() => setKakaoEnabled(!kakaoEnabled)} />
-          </div>
-        </div>
-
-        {/* 🔔 알림톡 수신 테스트하기 캡슐 버튼 */}
-        <div style={{ marginTop: '20px' }}>
-          <button
-            onClick={() => onTriggerAlimtalk && onTriggerAlimtalk()}
-            style={{
-              border: '1.5px solid rgba(255, 107, 74, 0.4)',
-              color: '#FF6B4A',
-              backgroundColor: 'rgba(255, 107, 74, 0.05)',
-              borderRadius: '24px',
-              padding: '12px 22px',
-              fontSize: '0.88rem',
-              fontWeight: '700',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.25s ease',
-              letterSpacing: '0.2px',
-            }}
-            onMouseOver={e => { e.currentTarget.style.backgroundColor = 'rgba(255, 107, 74, 0.1)'; }}
-            onMouseOut={e => { e.currentTarget.style.backgroundColor = 'rgba(255, 107, 74, 0.05)'; }}
-          >
-            <BellIcon /> 알림톡 수신 테스트하기
-          </button>
-        </div>
-
       </div>
     </div>
   );
@@ -723,7 +674,7 @@ export default function MyPage({ formData = {}, setFormData, mbtiTrait = {}, onb
         {/* GROUP 3: SETTINGS */}
         <div style={{ fontSize: '0.75rem', color: '#999999', letterSpacing: '1px', fontWeight: '700', marginBottom: '16px', marginTop: '48px' }}>SETTINGS · PREFERENCES</div>
         <Settings onTriggerAlimtalk={onTriggerAlimtalk} />
-        <GoogleCalendarSection />
+        {/* <GoogleCalendarSection /> - 기능 미구현으로 임시 숨김 */}
 
         {/* Footer & Logout */}
         <div style={{ textAlign: 'center', marginTop: '40px', paddingBottom: '20px' }}>
@@ -745,21 +696,29 @@ export default function MyPage({ formData = {}, setFormData, mbtiTrait = {}, onb
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000,
           display: 'flex', justifyContent: 'center', alignItems: 'center',
-          animation: 'fadeIn 0.3s ease'
+          animation: 'fadeIn 0.3s ease',
+          padding: '20px'
         }}>
-          <div style={{
-            backgroundColor: '#FDFBF7', borderRadius: '24px', padding: '30px',
-            width: '90%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto',
-            boxShadow: '0 12px 40px rgba(0,0,0,0.1)'
-          }}>
+          <div className="onb-card" style={{ width: '100%', maxWidth: '400px', margin: 0, maxHeight: '90vh', overflowY: 'auto', backgroundColor: '#FDFBF7', padding: '30px', borderRadius: '24px', boxShadow: '0 12px 40px rgba(0,0,0,0.1)' }}>
+            <style>{`
+              .onb-label { font-size: 0.8rem; font-weight: 700; color: #B08070; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; display: block; }
+              .onb-input { width: 100%; padding: 13px 16px; border-radius: 14px; border: none; background: #F9F4EF; font-size: 1rem; color: #4A3728; font-family: inherit; outline: none; box-sizing: border-box; transition: background 0.2s; }
+              .onb-input:focus { background: #F3EBE3; }
+              .onb-input::placeholder { color: #C8B8A8; }
+              .ampm-pill { flex: 1; padding: 11px 6px; border-radius: 12px; border: 1.5px solid #E8DDD5; background: #F9F4EF; color: #9A8070; font-size: 0.88rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.2s ease; text-align: center; line-height: 1.5; }
+              .ampm-pill:hover { border-color: #C4895A; color: #C4895A; background: #FFF5EE; }
+              .ampm-pill.active { background: #E2725B; border-color: #E2725B; color: white; box-shadow: 0 3px 10px rgba(226,114,91,0.22); }
+              .onb-enter-btn { width: 100%; padding: 18px; border-radius: 16px; border: none; background: linear-gradient(135deg, #E8855A 0%, #D05A42 100%); color: white; font-size: 1.05rem; font-weight: 700; cursor: pointer; font-family: inherit; letter-spacing: 0.5px; box-shadow: 0 6px 20px rgba(208,90,66,0.25); transition: all 0.3s ease; margin-top: 4px; }
+              .onb-enter-btn:hover { box-shadow: 0 8px 24px rgba(208,90,66,0.35); transform: translateY(-1px); }
+            `}</style>
             <h3 style={{ margin: '0 0 20px 0', fontSize: '1.3rem', color: '#333333', fontWeight: '800', textAlign: 'center' }}>나의 정보 수정</h3>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* 이름 */}
               <div>
-                <span style={{ display: 'block', fontSize: '0.85rem', color: '#888888', fontWeight: '700', marginBottom: '8px' }}>이름 <span style={{color: '#E2725B'}}>*</span></span>
+                <span className="onb-label">이름 <span style={{color: '#E2725B'}}>*</span></span>
                 <input
-                  style={{ width: '100%', padding: '14px 16px', borderRadius: '14px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', fontSize: '1rem', boxSizing: 'border-box' }}
+                  className="onb-input"
                   placeholder="어떻게 불러드릴까요?"
                   value={editData.name}
                   onChange={(e) => setEditData({ ...editData, name: e.target.value })}
@@ -768,10 +727,11 @@ export default function MyPage({ formData = {}, setFormData, mbtiTrait = {}, onb
 
               {/* 생년월일 */}
               <div>
-                <span style={{ display: 'block', fontSize: '0.85rem', color: '#888888', fontWeight: '700', marginBottom: '8px' }}>태어난 날 <span style={{color: '#E2725B'}}>*</span></span>
+                <span className="onb-label">태어난 날 <span style={{color: '#E2725B'}}>*</span></span>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <select
-                    style={{ flex: 2, padding: '14px 12px', borderRadius: '14px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', fontSize: '1rem', appearance: 'none', textAlign: 'center' }}
+                    className="onb-input"
+                    style={{ flex: 2, textAlign: 'center', appearance: 'none', cursor: 'pointer' }}
                     value={editData.year || ''}
                     onChange={(e) => {
                       const newYear = e.target.value;
@@ -789,7 +749,8 @@ export default function MyPage({ formData = {}, setFormData, mbtiTrait = {}, onb
                     ))}
                   </select>
                   <select
-                    style={{ flex: 1, padding: '14px 12px', borderRadius: '14px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', fontSize: '1rem', appearance: 'none', textAlign: 'center' }}
+                    className="onb-input"
+                    style={{ flex: 1, textAlign: 'center', appearance: 'none', cursor: 'pointer' }}
                     value={editData.month || ''}
                     onChange={(e) => {
                       const newMonth = e.target.value;
@@ -807,7 +768,8 @@ export default function MyPage({ formData = {}, setFormData, mbtiTrait = {}, onb
                     ))}
                   </select>
                   <select
-                    style={{ flex: 1, padding: '14px 12px', borderRadius: '14px', border: '1px solid #E5E5E5', backgroundColor: '#FFFFFF', fontSize: '1rem', appearance: 'none', textAlign: 'center' }}
+                    className="onb-input"
+                    style={{ flex: 1, textAlign: 'center', appearance: 'none', cursor: 'pointer' }}
                     value={editData.day || ''}
                     onChange={(e) => setEditData({ ...editData, day: e.target.value })}
                   >
@@ -821,41 +783,52 @@ export default function MyPage({ formData = {}, setFormData, mbtiTrait = {}, onb
 
               {/* 태어난 시간 */}
               <div>
-                <span style={{ display: 'block', fontSize: '0.85rem', color: '#888888', fontWeight: '700', marginBottom: '8px' }}>태어난 시간 <span style={{fontSize: '0.7rem', color: '#9A8070', fontWeight: 'normal'}}>(선택)</span></span>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-                  {ampmOptions.map(opt => (
+                <span className="onb-label">태어난 시간 <span style={{fontSize: '0.7rem', color: '#9A8070', fontWeight: 'normal'}}>(선택)</span></span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {ampmOptions.slice(0, 2).map(opt => (
+                      <button
+                        key={opt.val}
+                        className={`ampm-pill${editData.ampm === opt.val ? ' active' : ''}`}
+                        onClick={() => setEditData({ ...editData, ampm: opt.val })}
+                        style={{ flex: 1 }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                    {(editData.ampm === '오전' || editData.ampm === '오후') && (
+                      <div style={{ flex: 1.2, animation: 'fadeIn 0.3s ease' }}>
+                        <select
+                          className="onb-input"
+                          style={{
+                            textAlign: 'center', appearance: 'none', cursor: 'pointer',
+                            border: editData.hour ? '1.5px solid #E8DDD5' : '1.5px solid #E2725B', 
+                            background: editData.hour ? '#F9F4EF' : '#FFF5EE', 
+                            color: editData.hour ? '#4A3728' : '#E2725B', 
+                            fontWeight: editData.hour ? 'normal' : 'bold',
+                            animation: editData.hour ? 'none' : 'pulseBorder 2s infinite',
+                            padding: '11px 16px',
+                          }}
+                          value={editData.hour || ''}
+                          onChange={(e) => setEditData({ ...editData, hour: e.target.value })}
+                        >
+                          <option value="">시각 선택</option>
+                          {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}시</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  {ampmOptions.slice(2).map(opt => (
                     <button
                       key={opt.val}
-                      style={{
-                        flex: 1, padding: '12px 0', borderRadius: '14px',
-                        border: editData.ampm === opt.val ? '1.5px solid #E2725B' : '1px solid #E5E5E5',
-                        backgroundColor: editData.ampm === opt.val ? '#FFF5EE' : '#FFFFFF',
-                        color: editData.ampm === opt.val ? '#E2725B' : '#777777',
-                        fontWeight: editData.ampm === opt.val ? 'bold' : 'normal',
-                        cursor: 'pointer', transition: 'all 0.2s',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center'
-                      }}
-                      onClick={() => setEditData({ ...editData, ampm: opt.val })}
+                      className={`ampm-pill${editData.ampm === opt.val ? ' active' : ''}`}
+                      onClick={() => setEditData({ ...editData, ampm: opt.val, hour: '' })}
+                      style={{ width: '100%' }}
                     >
-                      <span style={{ fontSize: '1.1rem', marginBottom: '2px' }}>{opt.icon}</span>
                       {opt.label}
                     </button>
                   ))}
                 </div>
-                {(editData.ampm === '오전' || editData.ampm === '오후') && (
-                  <select
-                    style={{
-                      width: '100%', padding: '14px 16px', borderRadius: '14px',
-                      border: editData.hour ? '1px solid #E5E5E5' : '1.5px solid #E2725B', 
-                      backgroundColor: '#FFFFFF', fontSize: '1rem', appearance: 'none', cursor: 'pointer',
-                    }}
-                    value={editData.hour || ''}
-                    onChange={(e) => setEditData({ ...editData, hour: e.target.value })}
-                  >
-                    <option value="">시각을 선택해주세요</option>
-                    {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}시</option>)}
-                  </select>
-                )}
               </div>
             </div>
 
@@ -867,7 +840,8 @@ export default function MyPage({ formData = {}, setFormData, mbtiTrait = {}, onb
                 취소
               </button>
               <button 
-                style={{ flex: 2, padding: '16px 0', borderRadius: '16px', backgroundColor: '#E2725B', color: '#FFFFFF', border: 'none', fontWeight: '700', fontSize: '1rem', cursor: 'pointer' }}
+                className="onb-enter-btn"
+                style={{ flex: 2, padding: '16px 0', margin: 0, marginTop: 0 }}
                 onClick={() => {
                   if (!editData.name || editData.name.trim() === '') {
                     alert('이름을 입력해주세요.');
